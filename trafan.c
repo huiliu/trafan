@@ -50,6 +50,7 @@ int             runtime;
 int             top_limit;
 char           *bpf;
 char           *iface;
+int             quiet;
 pcap_t         *pcap_desc;
 GHashTable     *flow_tbl;
 
@@ -58,6 +59,7 @@ void free_flow_tbl(pkt_flow_t *flow);
 void
 globals_init(void)
 {
+    quiet = 0;
     debug = 0;
     bpf = NULL;
     iface = "eth0";
@@ -98,8 +100,9 @@ parse_args(int argc, char **argv)
 {
     int             c;
 
-    while ((c = getopt(argc, argv, "l:di:f:r:D")) != -1) {
+    while ((c = getopt(argc, argv, "ql:di:f:r:D")) != -1) {
         switch (c) {
+
         case 'D':
             debug++;
             break;
@@ -118,12 +121,16 @@ parse_args(int argc, char **argv)
 	case 'l':
 	    top_limit = atoi(optarg);
 	    break;
+	case 'q':
+	    quiet = 1;
+	    break;
         default:
             printf("Usage: %s [opts]\n"
                    "   -d: debug\n"
                    "   -i <iface>\n"
                    "   -f <bpf filter>\n" 
 		   "   -l <limit to top x>\n"
+		   "   -q: quiet\n"
 		   "   -r <runtime>\n", argv[0]);
             exit(1);
         }
@@ -363,7 +370,11 @@ report(int sock, short which, void *data)
     GArray         *ordered_array;
     int             i;
 
-    printf("-- START %ld\n", time(NULL) - runtime);
+    if (!quiet)
+	printf("-- START %ld\n", time(NULL) - runtime);
+    else 
+	printf("\n");
+
     ordered_array = g_array_new(FALSE, FALSE, sizeof(pkt_flow_t *));
     g_hash_table_foreach(flow_tbl, (void *)deal_with_flow, ordered_array);
     g_array_sort(ordered_array, (void *)flow_cmp);
@@ -373,6 +384,7 @@ report(int sock, short which, void *data)
 	if (top_limit && i >= top_limit)
 	    break;
 
+	printf("%4d. ", i+1);
         print_flow(g_array_index(ordered_array, pkt_flow_t *, i));
     }
 
@@ -384,7 +396,9 @@ report(int sock, short which, void *data)
 
     evtimer_set(&stop_event, (void *)report, NULL);
     evtimer_add(&stop_event, &tv);
-    printf("-- END   %ld\n\n", (long int)time(NULL));
+
+    if (!quiet)
+	printf("-- END   %ld\n\n", (long int)time(NULL));
 }
 
 void exit_prog(int sig)
