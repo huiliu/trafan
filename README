@@ -1,0 +1,100 @@
+trafan is a simple tool to profile traffic on a sniffer. 
+
+The main goal was to get per-flow stats such as Mbps, total bytes xfer, etc...
+
+Here are some examples of usage:
+
+./trafan -i bond0 -r 10 -l 5
+
+-i bond0: the interface we are listening on.
+-r 10:    this is the runtime, or the sample time. In this case we sample all
+          traffic within 10 seconds to output.
+-l 5:     This limits the output to only the top 5 talkers based on total bytes
+          transferred.
+
+The output is as follows:
+[root@sniffer mthomas]# ./trafan -i bond0 -r 10 -l 5
+-- START 1268250487
+75.101.129.115:80     12.345.194.49:52104   tp=17804      tB=18033404   Bps=1803340    Mbps=13 
+204.236.220.102:443   34.567.149.141:4790   tp=13004      tB=13102482   Bps=1310248    Mbps=9 
+216.169.248.33:80     12.345.198.42:2360    tp=7933       tB=7242888    Bps=724288     Mbps=5 
+12.345.192.24:4461    149.174.249.171:80    tp=6628       tB=6728946    Bps=672894     Mbps=5 
+10.181.176.220:2764   149.174.249.169:80    tp=5942       tB=4797452    Bps=685350     Mbps=5 
+-- END   1268250497
+
+-- START 1268250497
+34.567.149.141:4790   204.236.220.102:443   tp=16774      tB=16900787   Bps=1690078    Mbps=12 
+75.101.129.115:80     12.345.194.49:52104   tp=8756       tB=9404770    Bps=940477     Mbps=7 
+12.345.200.80:4126    149.174.249.137:80    tp=6377       tB=5221869    Bps=522186     Mbps=3 
+216.169.248.33:80     12.345.198.42:2360    tp=5374       tB=5161468    Bps=516146     Mbps=3 
+74.112.149.2:443      34.567.155.200:4093   tp=4021       tB=4270114    Bps=533764     Mbps=4 
+-- END   1268250507
+
+
+The first column is the source address and source port 
+The second column is the destination address and destination port
+The third column is the total packets seen within this flow
+The fourth column is the total bytes seen within this flow
+The fifth column is the average bytes per second for this flow.
+The sixth column is the mega bits per second for this flow.
+
+The output is ordered by the total bytes transferred. 
+
+After each output the statistics are reset. 
+
+
+If you wish to get second by second details about each flow you may use the -d flag (details).
+[root@nids-egress-m1 mthomas]# ./trafan -i bond0 -r 10 -l 5 -d
+-- START 1268250729
+34.567.149.103:3861   68.142.110.82:80      tp=29615      tB=32093982   Bps=3209398    Mbps=24 
+  Bps: 4069736, Mbps: 31
+  Bps: 3309510, Mbps: 25
+  Bps: 2217648, Mbps: 16
+  Bps: 3516616, Mbps: 26
+  Bps: 3734724, Mbps: 28
+  Bps: 2924390, Mbps: 22
+  Bps: 3792116, Mbps: 28
+  Bps: 3239934, Mbps: 24
+  Bps: 2814338, Mbps: 21
+10.66.187.205:1755    64.236.128.78:443     tp=20929      tB=15929479   Bps=1592947    Mbps=12 
+  Bps: 1835490, Mbps: 14
+  Bps: 1583974, Mbps: 12
+  Bps: 1801552, Mbps: 13
+  Bps: 1684110, Mbps: 12
+  Bps: 1463534, Mbps: 11
+  Bps: 1542663, Mbps: 11
+  Bps: 1576657, Mbps: 12
+  Bps: 1445670, Mbps: 11
+  Bps: 1568757, Mbps: 11
+204.236.220.102:443   34.567.149.141:4790   tp=15410      tB=15445016   Bps=1544501    Mbps=11 
+  Bps: 2206502, Mbps: 16
+  Bps: 235206, Mbps: 1
+  Bps: 1786854, Mbps: 13
+  Bps: 2432216, Mbps: 18
+  Bps: 618, Mbps: 0
+  Bps: 1085282, Mbps: 8
+  Bps: 3329634, Mbps: 25
+  Bps: 0, Mbps: 0
+  Bps: 2211786, Mbps: 16
+11.123.196.49:1205    149.174.249.153:80    tp=14091      tB=14789337   Bps=2112762    Mbps=16 
+  Bps: 742427, Mbps: 5
+  Bps: 2346392, Mbps: 17
+  Bps: 5325974, Mbps: 40
+  Bps: 3779922, Mbps: 28
+  Bps: 2594622, Mbps: 19
+  Bps: 0, Mbps: 0
+  Bps: 0, Mbps: 0
+11.172.2.220:1921     149.174.249.137:80    tp=15411      tB=14661356   Bps=1466135    Mbps=11 
+  Bps: 1711262, Mbps: 13
+  Bps: 1481348, Mbps: 11
+  Bps: 1660590, Mbps: 12
+  Bps: 1582530, Mbps: 12
+  Bps: 1316618, Mbps: 10
+  Bps: 1416038, Mbps: 10
+  Bps: 1430628, Mbps: 10
+  Bps: 1323760, Mbps: 10
+  Bps: 1442042, Mbps: 11
+-- END   1268250739
+
+
+After each flow display, each line under it represents a second-by-second display of bytes per second, and mega bits per second.
