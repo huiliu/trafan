@@ -44,7 +44,7 @@ After each output the statistics are reset.
 
 
 If you wish to get second by second details about each flow you may use the -d flag (details).
-[root@nids-egress-m1 mthomas]# ./trafan -i bond0 -r 10 -l 5 -d
+[root@sniffer mthomas]# ./trafan -i bond0 -r 10 -l 5 -d
 -- START 1268250729
 34.567.149.103:3861   68.142.110.82:80      tp=29615      tB=32093982   Bps=3209398    Mbps=24 
   Bps: 4069736, Mbps: 31
