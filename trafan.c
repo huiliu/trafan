@@ -66,7 +66,7 @@ globals_init(void)
     detail = 0;
     top_limit = 0;
     flow_tbl = g_hash_table_new_full(g_str_hash, g_str_equal, 
-	    NULL, free_flow_tbl);
+	    NULL, (void *)free_flow_tbl);
 }
 
 void 
@@ -75,11 +75,20 @@ free_flow_key(gpointer key)
     free(key);
 }
 
+void
+free_bps_node(uint32_t *a, void *d)
+{
+    free(a);
+}
+
 void 
 free_flow_tbl(pkt_flow_t *flow)
 {
     free(flow->key);
     evtimer_del(&flow->timer);
+    // DERR
+     
+    g_ptr_array_foreach(flow->bytes_per_sec, (void*)free_bps_node, NULL);
     g_ptr_array_free(flow->bytes_per_sec, TRUE);
     free(flow);
 }
@@ -286,6 +295,7 @@ void
 deal_with_bps_node(uint32_t * bytes, void *userdata)
 {
     printf("  Bps: %u, Mbps: %u\n", *bytes, *bytes * 8 / 1024 / 1024);
+    //free(bytes);
 }
 
 void
@@ -353,7 +363,7 @@ report(int sock, short which, void *data)
     GArray         *ordered_array;
     int             i;
 
-    printf("-- START %u\n", time(NULL) - runtime);
+    printf("-- START %ld\n", time(NULL) - runtime);
     ordered_array = g_array_new(FALSE, FALSE, sizeof(pkt_flow_t *));
     g_hash_table_foreach(flow_tbl, (void *)deal_with_flow, ordered_array);
     g_array_sort(ordered_array, (void *)flow_cmp);
@@ -374,7 +384,7 @@ report(int sock, short which, void *data)
 
     evtimer_set(&stop_event, (void *)report, NULL);
     evtimer_add(&stop_event, &tv);
-    printf("-- END   %u\n\n", time(NULL));
+    printf("-- END   %ld\n\n", (long int)time(NULL));
 }
 
 void exit_prog(int sig)
