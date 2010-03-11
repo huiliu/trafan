@@ -1,100 +1,79 @@
-trafan is a simple tool to profile traffic on a sniffer. 
-
-The main goal was to get per-flow stats such as Mbps, total bytes xfer, etc...
-
-Here are some examples of usage:
-
-./trafan -i bond0 -r 10 -l 5
-
--i bond0: the interface we are listening on.
--r 10:    this is the runtime, or the sample time. In this case we sample all
-          traffic within 10 seconds to output.
--l 5:     This limits the output to only the top 5 talkers based on total bytes
-          transferred.
-
-The output is as follows:
-[root@sniffer mthomas]# ./trafan -i bond0 -r 10 -l 5
--- START 1268250487
-75.101.129.115:80     12.345.194.49:52104   tp=17804      tB=18033404   Bps=1803340    Mbps=13 
-204.236.220.102:443   34.567.149.141:4790   tp=13004      tB=13102482   Bps=1310248    Mbps=9 
-216.169.248.33:80     12.345.198.42:2360    tp=7933       tB=7242888    Bps=724288     Mbps=5 
-12.345.192.24:4461    149.174.249.171:80    tp=6628       tB=6728946    Bps=672894     Mbps=5 
-10.181.176.220:2764   149.174.249.169:80    tp=5942       tB=4797452    Bps=685350     Mbps=5 
--- END   1268250497
-
--- START 1268250497
-34.567.149.141:4790   204.236.220.102:443   tp=16774      tB=16900787   Bps=1690078    Mbps=12 
-75.101.129.115:80     12.345.194.49:52104   tp=8756       tB=9404770    Bps=940477     Mbps=7 
-12.345.200.80:4126    149.174.249.137:80    tp=6377       tB=5221869    Bps=522186     Mbps=3 
-216.169.248.33:80     12.345.198.42:2360    tp=5374       tB=5161468    Bps=516146     Mbps=3 
-74.112.149.2:443      34.567.155.200:4093   tp=4021       tB=4270114    Bps=533764     Mbps=4 
--- END   1268250507
+Trafan (Traffic Analyzer) was created to give an admit a cursory glance into top
+talkers on a network. I originally wrote this to track down some bandwidth hogs, 
+but it has become very useful for other things. 
 
 
-The first column is the source address and source port 
-The second column is the destination address and destination port
-The third column is the total packets seen within this flow
-The fourth column is the total bytes seen within this flow
-The fifth column is the average bytes per second for this flow.
-The sixth column is the mega bits per second for this flow.
+Example usage:
 
-The output is ordered by the total bytes transferred. 
+[root@sniffer mthomas]# ~mthomas/trafan -i bond0 -r 5 -l 10 
+-- START 1268321553
+   1. 208.85.44.15:80       11.181.178.93:1763    tp=2729       tB=2258085    Bps=451617     Mbps=3 
+   2. 149.174.249.169:80    10.212.44.138:1123    tp=1184       tB=1193362    Bps=238672     Mbps=1 
+   3. 77.67.109.202:51727   11.181.90.66:2346     tp=1167       tB=1175722    Bps=235144     Mbps=1 
+   4. 10.212.52.178:1324    209.222.128.159:80    tp=1169       tB=1157528    Bps=231505     Mbps=1 
+   5. 10.123.3.10:50065     173.194.8.150:80      tp=1265       tB=1147123    Bps=229424     Mbps=1 
+   6. 10.66.178.53:49182    64.236.128.78:443     tp=1181       tB=1079384    Bps=215876     Mbps=1 
+   7. 68.33.5.164:5001      11.181.149.75:1631    tp=1010       tB=1031872    Bps=206374     Mbps=1 
+   8. 149.174.249.12:1935   10.123.3.153:55321    tp=985        tB=937232     Bps=468616     Mbps=3 
+   9. 11.181.173.214:42744  199.253.140.81:80     tp=844        tB=859374     Bps=214843     Mbps=1 
+  10. 199.80.53.100:80      10.212.31.42:2778     tp=802        tB=796664     Bps=159332     Mbps=1 
+-- END   1268321558
 
-After each output the statistics are reset. 
+-i bond0:  The interface to listen on.
+-r 5:      5 is the amount of time (in seconds) to analyze traffic 
+           before display.
+-l 10:     Limit the output to only the top 10 talkers. This is ordered 
+           by total bytes transferred. 
+
+Column 01: The Nth of the top X talkers.
+Column 02: The source address and source port of a flow.
+Column 03: The destination address and destination port of a flow.
+Column 04: Total packets seen within the given timeline.
+Column 05: Total bytes seen xferred within the given timeline.
+Column 06: Bytes per second.
+Column 07: Mega bits per second.
+
+[root@sniffer mthomas]# ~mthomas/trafan -i bond0 -r 1 -l 1 -q
+   1. 149.174.245.174:80    10.123.178.99:1713    tp=10918      tB=11079038   Bps=11079038   Mbps=84 
+   1. 10.123.178.99:1713    149.174.245.174:80    tp=9926       tB=10074462   Bps=10074462   Mbps=76 
+   1. 10.123.178.99:1713    149.174.245.174:80    tp=10711      tB=10876492   Bps=10876492   Mbps=82 
+   1. 10.123.178.99:1713    149.174.245.174:80    tp=10662      tB=10831628   Bps=10831628   Mbps=82 
+   1. 155.201.18.20:11160   10.123.177.185:1713   tp=1117       tB=617624     Bps=617624     Mbps=4 
+   1. 155.201.18.20:11160   10.123.177.185:1713   tp=1102       tB=619961     Bps=619961     Mbps=4 
+   1. 149.174.249.184:80    10.123.170.58:3461    tp=2358       tB=2561572    Bps=2561572    Mbps=19
+
+-i bond0: The interface we are listening on.
+-r 1:     The amount of time in seconds to analyze traffic.
+-l 1:     Limit the output to only one top talker.
+-q:       quiet output, (no START/END).
+
+This essentially gives us a realtime Mbps stat on ONLY the highest top talker.
+
+[root@sniffer mthomas]# ~mthomas/trafan -i bond0 -r 5 -l 3 -d
+-- START 1268322243
+   1. 10.181.186.55:3614    208.85.44.13:80       tp=3859       tB=3895982    Bps=973995     Mbps=7 
+       Bps: 3895982  Mbps: 29
+       Bps: 0        Mbps: 0
+       Bps: 0        Mbps: 0
+       Bps: 0        Mbps: 0
+   2. 64.50.236.52:80       10.172.3.54:4215      tp=3281       tB=2861532    Bps=572306     Mbps=4 
+       Bps: 581440   Mbps: 4
+       Bps: 565286   Mbps: 4
+       Bps: 569074   Mbps: 4
+       Bps: 578372   Mbps: 4
+   3. 10.180.177.196:1874   208.111.160.6:80      tp=1691       tB=1698259    Bps=339651     Mbps=2 
+       Bps: 935038   Mbps: 7
+       Bps: 90583    Mbps: 0
+       Bps: 672638   Mbps: 5
+       Bps: 0        Mbps: 0
+-- END   1268322248
 
 
-If you wish to get second by second details about each flow you may use the -d flag (details).
-[root@sniffer mthomas]# ./trafan -i bond0 -r 10 -l 5 -d
--- START 1268250729
-34.567.149.103:3861   68.142.110.82:80      tp=29615      tB=32093982   Bps=3209398    Mbps=24 
-  Bps: 4069736, Mbps: 31
-  Bps: 3309510, Mbps: 25
-  Bps: 2217648, Mbps: 16
-  Bps: 3516616, Mbps: 26
-  Bps: 3734724, Mbps: 28
-  Bps: 2924390, Mbps: 22
-  Bps: 3792116, Mbps: 28
-  Bps: 3239934, Mbps: 24
-  Bps: 2814338, Mbps: 21
-10.66.187.205:1755    64.236.128.78:443     tp=20929      tB=15929479   Bps=1592947    Mbps=12 
-  Bps: 1835490, Mbps: 14
-  Bps: 1583974, Mbps: 12
-  Bps: 1801552, Mbps: 13
-  Bps: 1684110, Mbps: 12
-  Bps: 1463534, Mbps: 11
-  Bps: 1542663, Mbps: 11
-  Bps: 1576657, Mbps: 12
-  Bps: 1445670, Mbps: 11
-  Bps: 1568757, Mbps: 11
-204.236.220.102:443   34.567.149.141:4790   tp=15410      tB=15445016   Bps=1544501    Mbps=11 
-  Bps: 2206502, Mbps: 16
-  Bps: 235206, Mbps: 1
-  Bps: 1786854, Mbps: 13
-  Bps: 2432216, Mbps: 18
-  Bps: 618, Mbps: 0
-  Bps: 1085282, Mbps: 8
-  Bps: 3329634, Mbps: 25
-  Bps: 0, Mbps: 0
-  Bps: 2211786, Mbps: 16
-11.123.196.49:1205    149.174.249.153:80    tp=14091      tB=14789337   Bps=2112762    Mbps=16 
-  Bps: 742427, Mbps: 5
-  Bps: 2346392, Mbps: 17
-  Bps: 5325974, Mbps: 40
-  Bps: 3779922, Mbps: 28
-  Bps: 2594622, Mbps: 19
-  Bps: 0, Mbps: 0
-  Bps: 0, Mbps: 0
-11.172.2.220:1921     149.174.249.137:80    tp=15411      tB=14661356   Bps=1466135    Mbps=11 
-  Bps: 1711262, Mbps: 13
-  Bps: 1481348, Mbps: 11
-  Bps: 1660590, Mbps: 12
-  Bps: 1582530, Mbps: 12
-  Bps: 1316618, Mbps: 10
-  Bps: 1416038, Mbps: 10
-  Bps: 1430628, Mbps: 10
-  Bps: 1323760, Mbps: 10
-  Bps: 1442042, Mbps: 11
--- END   1268250739
+-i bond0: blah blah
+-r 5:     sample for 5 seconds.
+-l 3:     limit to top 3 talkers.
+-d:       we want to see second-by-second statistics on this flow within the sample time.
 
-
-After each flow display, each line under it represents a second-by-second display of bytes per second, and mega bits per second.
+-d is a good flag to use to determine if a top talker for one sample was just burst traffic
+   this will display a second-by-second runddown on the bytes xferred within that sampling
+   session.

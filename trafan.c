@@ -89,9 +89,8 @@ free_flow_tbl(pkt_flow_t *flow)
 {
     free(flow->key);
     evtimer_del(&flow->timer);
-    // DERR
-     
-    g_ptr_array_foreach(flow->bytes_per_sec, (void*)free_bps_node, NULL);
+    g_ptr_array_foreach(flow->bytes_per_sec, 
+	    (void*)free_bps_node, NULL);
     g_ptr_array_free(flow->bytes_per_sec, TRUE);
     free(flow);
 }
@@ -127,10 +126,11 @@ parse_args(int argc, char **argv)
 	    break;
         default:
             printf("Usage: %s [opts]\n"
-                   "   -d: debug\n"
+                   "   -D: debug\n"
                    "   -i <iface>\n"
                    "   -f <bpf filter>\n" 
 		   "   -l <limit to top x>\n"
+		   "   -d: second-by-second details\n"
 		   "   -q: quiet\n"
 		   "   -r <runtime>\n", argv[0]);
             exit(1);
