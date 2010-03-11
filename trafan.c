@@ -222,6 +222,9 @@ packet_handler(const unsigned char *arg,
     uint32_t        ip_hl;
     pkt_flow_t     *flow;
 
+    if (hdr->len < sizeof(struct ip) + 14)
+	return;
+
     ip4 = (struct ip *) (pkt + 14);
 
     if (ip4->ip_v != 4)
@@ -234,11 +237,19 @@ packet_handler(const unsigned char *arg,
 
     switch (ip_proto) {
     case IPPROTO_UDP:
+	if (hdr->len < sizeof(struct ip) + 14 + 
+		ip_hl + sizeof(struct udphdr))
+	    return;
+
         udp = (struct udphdr *) ((unsigned char *) (ip4) + ip_hl);
         src_port = udp->uh_sport;
         dst_port = udp->uh_dport;
         break;
     case IPPROTO_TCP:
+	if (hdr->len < sizeof(struct ip) + 14 + 
+		ip_hl + sizeof(struct tcphdr))
+	    return;
+
         tcp = (struct tcphdr *) ((unsigned char *) (ip4) + ip_hl);
         src_port = tcp->th_sport;
         dst_port = tcp->th_dport;
@@ -303,7 +314,6 @@ void
 deal_with_bps_node(uint32_t * bytes, void *userdata)
 {
     printf("  Bps: %u, Mbps: %u\n", *bytes, *bytes * 8 / 1024 / 1024);
-    //free(bytes);
 }
 
 void
