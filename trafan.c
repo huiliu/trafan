@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <string.h>
 #include <time.h>
+#include <signal.h>
 #define __FAVOR_BSD
 #include <sys/socket.h>
 #include <netinet/in.h>
