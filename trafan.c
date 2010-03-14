@@ -60,16 +60,16 @@ void free_flow_tbl(pkt_flow_t *flow);
 void
 globals_init(void)
 {
-    quiet = 0;
-    debug = 0;
-    bpf = NULL;
-    iface = "eth0";
+    quiet     = 0;
+    debug     = 0;
+    bpf       = NULL;
+    iface     = "eth0";
     pcap_desc = NULL;
-    runtime = 60;
-    detail = 0;
+    runtime   = 60;
+    detail    = 0;
     top_limit = 0;
-    flow_tbl = g_hash_table_new_full(g_str_hash, g_str_equal, 
-	    NULL, (void *)free_flow_tbl);
+    flow_tbl  = g_hash_table_new_full(g_str_hash, g_str_equal, 
+	           NULL, (void *)free_flow_tbl);
 }
 
 void 
@@ -222,7 +222,7 @@ packet_handler(const unsigned char *arg,
     uint32_t        ip_hl;
     pkt_flow_t     *flow;
 
-    if (hdr->len < sizeof(struct ip) + 14)
+    if (hdr->caplen < sizeof(struct ip) + 14)
 	return;
 
     ip4 = (struct ip *) (pkt + 14);
@@ -237,7 +237,7 @@ packet_handler(const unsigned char *arg,
 
     switch (ip_proto) {
     case IPPROTO_UDP:
-	if (hdr->len < sizeof(struct ip) + 14 + 
+	if (hdr->caplen < sizeof(struct ip) + 14 + 
 		ip_hl + sizeof(struct udphdr))
 	    return;
 
@@ -246,7 +246,7 @@ packet_handler(const unsigned char *arg,
         dst_port = udp->uh_dport;
         break;
     case IPPROTO_TCP:
-	if (hdr->len < sizeof(struct ip) + 14 + 
+	if (hdr->caplen < sizeof(struct ip) + 14 + 
 		ip_hl + sizeof(struct tcphdr))
 	    return;
 
@@ -423,10 +423,15 @@ int
 main(int argc, char **argv)
 {
     struct timeval  tv;
+
     globals_init();
+
     parse_args(argc, argv);
+
     event_init();
     pcap_init();
+
+    signal(SIGINT, exit_prog);
 
     tv.tv_sec = runtime;
     tv.tv_usec = 0;
@@ -434,9 +439,6 @@ main(int argc, char **argv)
     evtimer_set(&stop_event, (void *) report, NULL);
     evtimer_add(&stop_event, &tv);
 
-    signal(SIGINT, exit_prog);
-
     event_loop(0);
-
     return 0;
 }
