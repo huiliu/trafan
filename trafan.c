@@ -89,9 +89,14 @@ free_flow_tbl(pkt_flow_t *flow)
 {
     free(flow->key);
     evtimer_del(&flow->timer);
-    g_ptr_array_foreach(flow->bytes_per_sec, 
-	    (void*)free_bps_node, NULL);
-    g_ptr_array_free(flow->bytes_per_sec, TRUE);
+
+    if (detail)
+    {
+	g_ptr_array_foreach(flow->bytes_per_sec, 
+    		(void*)free_bps_node, NULL);
+	g_ptr_array_free(flow->bytes_per_sec, TRUE);
+    }
+
     free(flow);
 }
 
@@ -148,10 +153,14 @@ do_flow_transforms(int sock, short which, pkt_flow_t * flow)
         flow->src_addr, ntohs(flow->src_port),
         flow->dst_addr, ntohs(flow->dst_port), flow->current_bytes);
 
-    bytes_ps = malloc(sizeof(uint32_t));
+    if (detail)
+    {
+    
+	bytes_ps = malloc(sizeof(uint32_t));
 
-    memcpy(bytes_ps, &flow->current_bytes, sizeof(uint32_t));
-    g_ptr_array_add(flow->bytes_per_sec, bytes_ps);
+	memcpy(bytes_ps, &flow->current_bytes, sizeof(uint32_t));
+	g_ptr_array_add(flow->bytes_per_sec, bytes_ps);
+    }
 
     flow->current_bytes = 0;
     tv.tv_sec = 1;
@@ -192,8 +201,10 @@ find_flow(uint32_t src_addr, uint16_t src_port,
     flow->total_bytes_xferred = 0;
     flow->current_bytes = 0;
     flow->total_packets = 0;
-    flow->bytes_per_sec = g_ptr_array_new();
     flow->key = strdup(buff);
+
+    if (detail)
+	flow->bytes_per_sec = g_ptr_array_new();
 
     tv.tv_sec = 1;
     tv.tv_usec = 0;
