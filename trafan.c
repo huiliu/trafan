@@ -361,7 +361,7 @@ print_flow(pkt_flow_t * flow)
     if (detail) {
         printf("\n");
         g_ptr_array_foreach(flow->bytes_per_sec, (void*)deal_with_bps_node, NULL);
-    } else printf("\n");
+    } else printf("%s", top_limit != 1?"\n":"");
 
 }
 
@@ -395,7 +395,7 @@ report(int sock, short which, void *data)
     if (!quiet)
 	printf("-- START %ld\n", time(NULL) - runtime);
     else 
-	printf("\n");
+	printf("%s", g_hash_table_size(flow_tbl)?"\n":"");
 
     ordered_array = g_array_new(FALSE, FALSE, sizeof(pkt_flow_t *));
     g_hash_table_foreach(flow_tbl, (void *)deal_with_flow, ordered_array);
