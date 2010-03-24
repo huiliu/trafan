@@ -52,6 +52,8 @@ int             top_limit;
 char           *bpf;
 char           *iface;
 int             quiet;
+uint64_t        global_bytes_xferred;
+uint32_t        global_time;
 pcap_t         *pcap_desc;
 GHashTable     *flow_tbl;
 
@@ -70,6 +72,7 @@ globals_init(void)
     top_limit = 0;
     flow_tbl  = g_hash_table_new_full(g_str_hash, g_str_equal, 
 	           NULL, (void *)free_flow_tbl);
+    global_bytes_xferred = 0;
 }
 
 void 
@@ -155,7 +158,6 @@ do_flow_transforms(int sock, short which, pkt_flow_t * flow)
 
     if (detail)
     {
-    
 	bytes_ps = malloc(sizeof(uint32_t));
 
 	memcpy(bytes_ps, &flow->current_bytes, sizeof(uint32_t));
@@ -277,6 +279,8 @@ packet_handler(const unsigned char *arg,
     flow->total_bytes_xferred += hdr->len;
     flow->current_bytes += hdr->len;
     flow->total_packets += 1;
+
+    global_bytes_xferred += hdr->len;
 }
 
 
@@ -393,7 +397,27 @@ report(int sock, short which, void *data)
     int             i;
 
     if (!quiet)
-	printf("-- START %ld\n", time(NULL) - runtime);
+    {
+	uint32_t global_Bps, global_Mbps;
+	uint32_t timediff;
+
+	global_Bps = global_Mbps = 0;
+
+	timediff = time(NULL) - global_time;
+
+	if (timediff)
+	{
+	    global_Bps  = global_bytes_xferred / timediff;
+	    global_Mbps = (global_bytes_xferred / timediff) * 8 / 1024 / 1024;
+	}
+
+	printf("-- START %ld [ tB=%llu Bps=%u Mbps=%u ]\n", 
+		time(NULL) - runtime, global_bytes_xferred, 
+		global_Bps, global_Mbps);
+	
+	global_bytes_xferred = 0;
+	global_time = time(NULL);
+    }
     else 
 	printf("%s", g_hash_table_size(flow_tbl)?"\n":"");
 
