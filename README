@@ -77,3 +77,5 @@ This essentially gives us a realtime Mbps stat on ONLY the highest top talker.
 -d is a good flag to use to determine if a top talker for one sample was just burst traffic
    this will display a second-by-second runddown on the bytes xferred within that sampling
    session.
+
+I highly suggest utilizing libpcap-1.0 since the direct kernel mmap is the bomb!
