@@ -299,7 +299,7 @@ pcap_init(void)
     char            errbuf[PCAP_ERRBUF_SIZE];
     int             pcap_fd;
 
-    if (!(pcap_desc = pcap_open_live(iface, 512, 1, 0, errbuf)))
+    if (!(pcap_desc = pcap_open_live(iface, 90, 1, 0, errbuf)))
         goto pcap_err;
 
     if (bpf) {
@@ -444,7 +444,13 @@ report(int sock, short which, void *data)
     evtimer_add(&stop_event, &tv);
 
     if (!quiet)
-	printf("-- END   %ld\n\n", (long int)time(NULL));
+    {
+	struct pcap_stat ps;
+
+	pcap_stats(pcap_desc, &ps);
+	printf("-- END   %ld [ pcap_recvd=%d pcap_dropped=%d ]\n\n", 
+		(long int)time(NULL), ps.ps_recv, ps.ps_drop);
+    }
 }
 
 void exit_prog(int sig)
