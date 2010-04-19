@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 import os, sys
 
-env = Environment()
+env = Environment(ENV=os.environ)
 
 env.ParseConfig('pkg-config --cflags --libs glib-2.0')
 env.Append(CFLAGS="-O3")

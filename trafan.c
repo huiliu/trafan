@@ -54,6 +54,10 @@ char           *iface;
 int             quiet;
 uint64_t        global_bytes_xferred;
 uint32_t        global_time;
+
+/* if the aggregate option is set, we don't use 
+   a flow, but we see a per host statistics */
+uint32_t        aggregate_flows;
 pcap_t         *pcap_desc;
 GHashTable     *flow_tbl;
 
@@ -70,6 +74,7 @@ globals_init(void)
     runtime   = 60;
     detail    = 0;
     top_limit = 0;
+    aggregate_flows = 0;
     flow_tbl  = g_hash_table_new_full(g_str_hash, g_str_equal, 
 	           NULL, (void *)free_flow_tbl);
     global_bytes_xferred = 0;
@@ -108,7 +113,7 @@ parse_args(int argc, char **argv)
 {
     int             c;
 
-    while ((c = getopt(argc, argv, "ql:di:f:r:D")) != -1) {
+    while ((c = getopt(argc, argv, "ql:di:f:r:Da")) != -1) {
         switch (c) {
 
         case 'D':
@@ -132,6 +137,9 @@ parse_args(int argc, char **argv)
 	case 'q':
 	    quiet = 1;
 	    break;
+	case 'a':
+	    aggregate_flows = 1;
+	    break;
         default:
             printf("Usage: %s [opts]\n"
                    "   -D: debug\n"
@@ -140,7 +148,9 @@ parse_args(int argc, char **argv)
 		   "   -l <limit to top x>\n"
 		   "   -d: second-by-second details\n"
 		   "   -q: quiet\n"
-		   "   -r <runtime>\n", argv[0]);
+		   "   -r <runtime>\n"
+		   "   -a: aggregate so we get a host by host breakdown.\n",
+		   argv[0]);
             exit(1);
         }
     }
@@ -182,11 +192,24 @@ find_flow(uint32_t src_addr, uint16_t src_port,
 
     memset(buff, 0, sizeof(buff));
 
-    snprintf(buff, sizeof(buff) - 1, "%u%d%u%d",
-             src_addr, src_port, dst_addr, dst_port);
+    if (aggregate_flows)
+    {
+	/* turn off the destination stuff, we only
+	   care about the total for that host */
+	dst_addr = 0;
+	dst_port = 0;
+	src_port = 0;
+    }
+    else 
+    {
+	/* if aggregation is turned on, we only care about
+	   one side of the conversation */
+	snprintf(buff, sizeof(buff) - 1, "%u%d%u%d",
+	   	src_addr, src_port, dst_addr, dst_port);
 
-    if ((flow = g_hash_table_lookup(flow_tbl, buff)))
-        return flow;
+	if ((flow = g_hash_table_lookup(flow_tbl, buff)))
+	    return flow;
+    }
 
     snprintf(buff, sizeof(buff) - 1, "%u%d%u%d",
              dst_addr, dst_port, src_addr, src_port);
