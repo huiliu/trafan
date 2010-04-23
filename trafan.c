@@ -43,17 +43,27 @@ typedef struct pkt_flow {
     struct event    timer;
 } pkt_flow_t;
 
+typedef enum {
+    ORDER_BY_TOTAL_BYTES,
+    ORDER_BY_MBPS,
+    ORDER_BY_BPS,
+    ORDER_BY_TOTAL_PACKETS
+} order_by_t;
+
 struct event    pcap_event;
 struct event    stop_event;
 int             debug;
 int             detail;
 int             runtime;
 int             top_limit;
+int             stop_count;
+int             count_stop;
 char           *bpf;
 char           *iface;
 int             quiet;
 uint64_t        global_bytes_xferred;
 uint32_t        global_time;
+order_by_t      order_by;
 
 /* if the aggregate option is set, we don't use 
    a flow, but we see a per host statistics */
@@ -74,10 +84,12 @@ globals_init(void)
     runtime   = 60;
     detail    = 0;
     top_limit = 0;
-    aggregate_flows = 0;
+    stop_count           = 0;
+    aggregate_flows      = 0;
+    global_bytes_xferred = 0;
+    order_by             = ORDER_BY_TOTAL_BYTES;
     flow_tbl  = g_hash_table_new_full(g_str_hash, g_str_equal, 
 	           NULL, (void *)free_flow_tbl);
-    global_bytes_xferred = 0;
 }
 
 void 
@@ -113,7 +125,7 @@ parse_args(int argc, char **argv)
 {
     int             c;
 
-    while ((c = getopt(argc, argv, "ql:di:f:r:Da")) != -1) {
+    while ((c = getopt(argc, argv, "ql:di:f:r:Dac:O:")) != -1) {
         switch (c) {
 
         case 'D':
@@ -140,6 +152,30 @@ parse_args(int argc, char **argv)
 	case 'a':
 	    aggregate_flows = 1;
 	    break;
+	case 'c':
+	    stop_count = atoi(optarg);
+	    count_stop = stop_count;
+	    break;
+	case 'O':
+	    switch (*optarg)
+	    {
+		case 'p':
+		    order_by = ORDER_BY_TOTAL_PACKETS;
+		    break;
+		case 'B':
+		    order_by = ORDER_BY_TOTAL_BYTES;
+		    break;
+		case 'b':
+		    order_by = ORDER_BY_BPS;
+		    break;
+		case 'm':
+		    order_by = ORDER_BY_MBPS;
+		    break;
+		default:
+		    printf("Unknown ordering %c, using default (order by total bytes)\n", *optarg);
+		    break;
+	    }
+	    break;
         default:
             printf("Usage: %s [opts]\n"
                    "   -D: debug\n"
@@ -149,7 +185,12 @@ parse_args(int argc, char **argv)
 		   "   -d: second-by-second details\n"
 		   "   -q: quiet\n"
 		   "   -r <runtime>\n"
-		   "   -a: aggregate so we get a host by host breakdown.\n",
+		   "   -a: aggregate (disable flows)\n"
+		   "  -Op: Order by total packets\n"
+		   "  -Ob: Order by Bps\n"
+		   "  -Om: Order by Mbps\n"
+		   "  -OB: Order by total bytes (default)\n"
+		   "   -c <num>: exit after count reports.\n", 
 		   argv[0]);
             exit(1);
         }
@@ -354,23 +395,35 @@ deal_with_bps_node(uint32_t * bytes, void *userdata)
     printf("  Bps: %u, Mbps: %u\n", *bytes, *bytes * 8 / 1024 / 1024);
 }
 
+void 
+calculate_ps(uint32_t time_start, uint64_t xferred,  
+	uint32_t *in_Mbps, uint32_t *in_Bps)
+{
+    uint32_t timediff;
+    uint32_t Bps, Mbps;
+
+    Bps = Mbps = 0;
+
+    timediff = time(NULL) - time_start;
+
+    if (timediff)
+    {
+	Bps  = xferred / timediff;
+	Mbps = (xferred / timediff) * 8 / 1024 / 1024;
+    }
+
+    *in_Mbps = Mbps;
+    *in_Bps  = Bps;
+}
+
 void
 print_flow(pkt_flow_t * flow)
 {
-    uint32_t timediff;
     uint32_t Bps, Mbps;
     char sbuf[22];
     char dbuf[22];
 
-    timediff = time(NULL) - flow->time_start;
-
-    Bps = Mbps = 0;
-
-    if (timediff)
-    {
-	Bps  = flow->total_bytes_xferred / timediff;
-	Mbps = (flow->total_bytes_xferred / timediff) * 8 / 1024 / 1024;
-    }
+    calculate_ps(flow->time_start, flow->total_bytes_xferred, &Mbps, &Bps);
 
     snprintf(sbuf, 21, "%s:%d", 
 	    inet_ntoa(*(struct in_addr *) &flow->src_addr),
@@ -397,11 +450,53 @@ flow_cmp(void *ap, void *bp)
 {
     pkt_flow_t     *a = *(pkt_flow_t **) ap;
     pkt_flow_t     *b = *(pkt_flow_t **) bp;
+    uint64_t        var1, var2;
+    uint32_t        Mbps, Bps;
 
-    if (a->total_bytes_xferred > b->total_bytes_xferred)
-        return -1;
-    if (a->total_bytes_xferred < b->total_bytes_xferred)
-        return 1;
+    Mbps = Bps = 0;
+
+    switch(order_by)
+    {
+	case ORDER_BY_TOTAL_BYTES:
+	    var1 = a->total_bytes_xferred;
+	    var2 = b->total_bytes_xferred;
+	    break;
+	case ORDER_BY_MBPS:
+	    calculate_ps(a->time_start, 
+		    a->total_bytes_xferred, &Mbps, &Bps);
+
+	    var1 = Mbps;
+
+	    calculate_ps(b->time_start,
+		    b->total_bytes_xferred, &Mbps, &Bps);
+
+	    var2 = Mbps;
+	    break;
+	case ORDER_BY_BPS:
+	    calculate_ps(a->time_start, 
+                    a->total_bytes_xferred, &Mbps, &Bps);
+
+            var1 = Bps;
+
+            calculate_ps(b->time_start,
+                    b->total_bytes_xferred, &Mbps, &Bps);
+
+            var2 = Bps;
+	    break;
+	case ORDER_BY_TOTAL_PACKETS:
+	    var1 = a->total_packets;
+	    var2 = b->total_packets;
+	    break;
+	default:
+	    var1 = 0;
+	    var2 = 0;
+	    break;
+    }
+
+    if (var1 > var2)
+	return -1;
+    if (var1 < var2)
+	return 1;
 
     return 0;
 }
@@ -422,17 +517,9 @@ report(int sock, short which, void *data)
     if (!quiet)
     {
 	uint32_t global_Bps, global_Mbps;
-	uint32_t timediff;
 
-	global_Bps = global_Mbps = 0;
-
-	timediff = time(NULL) - global_time;
-
-	if (timediff)
-	{
-	    global_Bps  = global_bytes_xferred / timediff;
-	    global_Mbps = (global_bytes_xferred / timediff) * 8 / 1024 / 1024;
-	}
+	calculate_ps(global_time, global_bytes_xferred, 
+		&global_Mbps, &global_Bps); 
 
 	printf("-- START %ld [ tB=%llu Bps=%u Mbps=%u ]\n", 
 		time(NULL) - runtime, global_bytes_xferred, 
@@ -474,6 +561,9 @@ report(int sock, short which, void *data)
 	printf("-- END   %ld [ pcap_recvd=%d pcap_dropped=%d ]\n\n", 
 		(long int)time(NULL), ps.ps_recv, ps.ps_drop);
     }
+
+    if (stop_count && --count_stop <= 0)
+	exit(1);
 }
 
 void exit_prog(int sig)
