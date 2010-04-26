@@ -28,6 +28,15 @@
       fprintf(stderr,x,## s); \
 } while(0);
 
+typedef struct pkt_flow_aggregate {
+    uint32_t address;
+    uint32_t packets;
+    uint8_t  top_level:4;
+    uint8_t  protocol:4;
+    uint64_t bytes_xferred;
+    /* tree of pkt_flow_aggregates */
+    GTree   *talked_to;
+} pkt_flow_aggregate_t;
 
 typedef struct pkt_flow {
     gpointer        key;
@@ -39,6 +48,7 @@ typedef struct pkt_flow {
     uint64_t        total_bytes_xferred;
     uint32_t        current_bytes;
     uint64_t        total_packets;
+    uint8_t         proto;
     GPtrArray      *bytes_per_sec;
     struct event    timer;
 } pkt_flow_t;
@@ -47,7 +57,8 @@ typedef enum {
     ORDER_BY_TOTAL_BYTES,
     ORDER_BY_MBPS,
     ORDER_BY_BPS,
-    ORDER_BY_TOTAL_PACKETS
+    ORDER_BY_TOTAL_PACKETS,
+    ORDER_BY_DESTINATION_COUNT
 } order_by_t;
 
 struct event    pcap_event;
@@ -56,6 +67,8 @@ int             debug;
 int             detail;
 int             runtime;
 int             top_limit;
+int             report_top_limit;
+int             report_dest_limit;
 int             stop_count;
 int             count_stop;
 char           *bpf;
@@ -63,13 +76,16 @@ char           *iface;
 int             quiet;
 uint64_t        global_bytes_xferred;
 uint32_t        global_time;
+int             reverse_order;
 order_by_t      order_by;
+order_by_t      aggregate_order_by;
 
 /* if the aggregate option is set, we don't use 
    a flow, but we see a per host statistics */
 uint32_t        aggregate_flows;
 pcap_t         *pcap_desc;
 GHashTable     *flow_tbl;
+GTree          *aggregates;
 
 void free_flow_tbl(pkt_flow_t *flow);
 
@@ -81,13 +97,19 @@ globals_init(void)
     bpf       = NULL;
     iface     = "eth0";
     pcap_desc = NULL;
-    runtime   = 60;
+    runtime   = 1;
     detail    = 0;
     top_limit = 0;
+    reverse_order        = 0;
+    report_top_limit     = 0;
+    report_dest_limit    = 0;
     stop_count           = 0;
     aggregate_flows      = 0;
     global_bytes_xferred = 0;
+    aggregates           = NULL;
     order_by             = ORDER_BY_TOTAL_BYTES;
+    aggregate_order_by   = ORDER_BY_TOTAL_BYTES;
+
     flow_tbl  = g_hash_table_new_full(g_str_hash, g_str_equal, 
 	           NULL, (void *)free_flow_tbl);
 }
@@ -120,12 +142,25 @@ free_flow_tbl(pkt_flow_t *flow)
     free(flow);
 }
 
+static int                                                                                                                              
+addr_cmp(const void *a, const void *b)
+{
+    if (*(uint32_t *) a < *(uint32_t *) b)
+        return -1;
+
+    if (*(uint32_t *) a > *(uint32_t *) b)
+        return 1;
+
+    return 0;
+}
+
 void
 parse_args(int argc, char **argv)
 {
     int             c;
+    char         *tok;
 
-    while ((c = getopt(argc, argv, "ql:di:f:r:Dac:O:")) != -1) {
+    while ((c = getopt(argc, argv, "nhRqL:l:di:f:r:Dac:O:o:")) != -1) {
         switch (c) {
 
         case 'D':
@@ -146,8 +181,15 @@ parse_args(int argc, char **argv)
 	case 'l':
 	    top_limit = atoi(optarg);
 	    break;
+	case 'L':
+	    tok = strtok(optarg, ":");
+	    report_top_limit = atoi(tok);
+	    tok = strtok(NULL, ":");
+	    if (tok)
+		report_dest_limit = atoi(tok);
+	    break;
 	case 'q':
-	    quiet = 1;
+	    quiet++;
 	    break;
 	case 'a':
 	    aggregate_flows = 1;
@@ -176,21 +218,48 @@ parse_args(int argc, char **argv)
 		    break;
 	    }
 	    break;
+	case 'o':
+	    switch (*optarg)
+	    {
+		case 'p':
+		    aggregate_order_by = ORDER_BY_TOTAL_PACKETS;
+		    break;
+		case 'B':
+		    aggregate_order_by = ORDER_BY_TOTAL_BYTES;
+		    break;
+		case 'h':
+		    aggregate_order_by = ORDER_BY_DESTINATION_COUNT; 
+		    break;
+	    }
+	    break;
+	case 'R':
+	    aggregates = g_tree_new((GCompareFunc)addr_cmp);
+	    break;
+	case 'n':
+	    reverse_order = 1;
+	    break;
+	case 'h':
         default:
             printf("Usage: %s [opts]\n"
                    "   -D: debug\n"
-                   "   -i <iface>\n"
-                   "   -f <bpf filter>\n" 
-		   "   -l <limit to top x>\n"
+                   "   -i  <iface>\n"
+                   "   -f  <bpf filter>\n" 
+		   "   -l  <limit to top x>\n"
+		   "   -L  <aggregate report top X>:<aggregate report destination top X>\n"
 		   "   -d: second-by-second details\n"
 		   "   -q: quiet\n"
-		   "   -r <runtime>\n"
+		   "   -r  <runtime>\n"
 		   "   -a: aggregate (disable flows)\n"
+		   "   -R: display aggregate flow report at exit\n"
 		   "  -Op: Order by total packets\n"
 		   "  -Ob: Order by Bps\n"
 		   "  -Om: Order by Mbps\n"
 		   "  -OB: Order by total bytes (default)\n"
-		   "   -c <num>: exit after count reports.\n", 
+		   "  -op: Order aggregation report by packets\n"
+		   "  -oB: Order aggregation report by total_bytes\n"
+		   "  -oh: Order aggregation report by distinct dest host counts\n"
+		   "   -n: Reverse ordering (small to large)\n"
+		   "   -c  <num>: exit after count reports.\n", 
 		   argv[0]);
             exit(1);
         }
@@ -223,6 +292,58 @@ do_flow_transforms(int sock, short which, pkt_flow_t * flow)
     evtimer_add(&flow->timer, &tv);
 }
 
+pkt_flow_aggregate_t *
+do_aggregate(uint32_t src_addr, uint32_t dst_addr, uint32_t bytes, uint8_t proto)
+{
+    pkt_flow_aggregate_t *found, *dst_found;
+
+    if (aggregates == NULL)
+	return NULL;
+
+    /* check the aggregates hash for the src_addr */
+    found = g_tree_lookup(aggregates, &src_addr);
+
+    if (!found)
+    {
+	found = malloc(sizeof(pkt_flow_aggregate_t));
+
+	found->address       = src_addr;
+	found->packets       = 0;
+	found->bytes_xferred = 0;
+	found->top_level     = 1;
+	found->talked_to     = g_tree_new((GCompareFunc)addr_cmp);
+
+	g_tree_insert(aggregates, &found->address, found);
+    }
+
+    found->bytes_xferred += bytes;
+    found->packets       += 1;
+
+    dst_found = g_tree_lookup(found->talked_to, &dst_addr);
+
+    if (!dst_found)
+    {
+	/* create a new destination node, then slap it 
+	   into the founds talked_to tree */
+	dst_found = malloc(sizeof(pkt_flow_aggregate_t));
+
+	dst_found->address       = dst_addr;
+	dst_found->packets       = 0;
+	dst_found->bytes_xferred = 0;
+	dst_found->top_level     = 0;
+	dst_found->talked_to     = NULL;
+
+	g_tree_insert(found->talked_to, 
+		&dst_found->address, dst_found);
+    }
+
+    dst_found->packets       += 1;
+    dst_found->bytes_xferred += bytes;
+    dst_found->protocol       = proto;
+
+    return found;
+}
+
 pkt_flow_t     *
 find_flow(uint32_t src_addr, uint16_t src_port,
           uint32_t dst_addr, uint16_t dst_port)
@@ -230,8 +351,14 @@ find_flow(uint32_t src_addr, uint16_t src_port,
     char            buff[10 + 5 + 10 + 5 + 1];
     pkt_flow_t     *flow;
     struct timeval  tv;
+    uint16_t src_port_copy, dst_port_copy;
+    uint32_t dst_addr_copy;
 
     memset(buff, 0, sizeof(buff));
+
+    src_port_copy = src_port;
+    dst_port_copy = dst_port;
+    dst_addr_copy = dst_addr;
 
     if (aggregate_flows)
     {
@@ -332,8 +459,10 @@ packet_handler(const unsigned char *arg,
         dst_port = tcp->th_dport;
         break;
     default:
-        LOG("Unknown protocol %d\n", ip_proto);
+	src_port = 0;
+	dst_port = 0;
         return;
+
     }
 
     if (!(flow = find_flow(src_addr, src_port, dst_addr, dst_port)))
@@ -343,6 +472,10 @@ packet_handler(const unsigned char *arg,
     flow->total_bytes_xferred += hdr->len;
     flow->current_bytes += hdr->len;
     flow->total_packets += 1;
+    flow->proto = ip_proto;
+
+    if (aggregates)
+	do_aggregate(src_addr, dst_addr, hdr->len, ip_proto);
 
     global_bytes_xferred += hdr->len;
 }
@@ -392,7 +525,7 @@ pcap_init(void)
 void
 deal_with_bps_node(uint32_t * bytes, void *userdata)
 {
-    printf("  Bps: %u, Mbps: %u\n", *bytes, *bytes * 8 / 1024 / 1024);
+    printf("      Bps=%-10u Mbps=%-10u\n", *bytes, *bytes * 8 / 1024 / 1024);
 }
 
 void 
@@ -423,7 +556,8 @@ print_flow(pkt_flow_t * flow)
     char sbuf[22];
     char dbuf[22];
 
-    calculate_ps(flow->time_start, flow->total_bytes_xferred, &Mbps, &Bps);
+    calculate_ps(flow->time_start, 
+	    flow->total_bytes_xferred, &Mbps, &Bps);
 
     snprintf(sbuf, 21, "%s:%d", 
 	    inet_ntoa(*(struct in_addr *) &flow->src_addr),
@@ -433,6 +567,7 @@ print_flow(pkt_flow_t * flow)
 	    ntohs(flow->dst_port));
 
     printf("%-21s %-21s ", sbuf, dbuf);
+    printf("p=%-2d ", flow->proto);
     printf("tp=%-10llu ", flow->total_packets);
     printf("tB=%-10llu ", flow->total_bytes_xferred);
     printf("Bps=%-10u ",  Bps); 
@@ -446,12 +581,71 @@ print_flow(pkt_flow_t * flow)
 }
 
 int
+aggregate_cmp(void *ap, void *bp)
+{
+    uint64_t var1, var2;
+    order_by_t order;
+    pkt_flow_aggregate_t *a;
+    pkt_flow_aggregate_t *b;
+
+    if (reverse_order)
+    {
+	a = *(pkt_flow_aggregate_t **)bp;
+	b = *(pkt_flow_aggregate_t **)ap;
+    } else {
+	a = *(pkt_flow_aggregate_t **)ap;
+	b = *(pkt_flow_aggregate_t **)bp;
+    }
+
+    order = aggregate_order_by;
+
+    if (!a->top_level)
+	order = ORDER_BY_TOTAL_BYTES;
+
+    switch(order)
+    {
+	case ORDER_BY_TOTAL_BYTES:
+	    var1 = a->bytes_xferred;
+	    var2 = b->bytes_xferred;
+	    break;
+	case ORDER_BY_TOTAL_PACKETS:
+	    var1 = a->packets;
+	    var2 = b->packets;
+	    break;
+	case ORDER_BY_DESTINATION_COUNT:
+	    var1 = g_tree_nnodes(a->talked_to);
+	    var2 = g_tree_nnodes(b->talked_to);
+	    break;
+	default:
+	    var1 = 0;
+	    var2 = 0;
+    }
+    if (var1 > var2)
+	return -1;
+    if (var1 < var2)
+	return 1;
+
+    return 0;
+}
+
+int
 flow_cmp(void *ap, void *bp)
 {
-    pkt_flow_t     *a = *(pkt_flow_t **) ap;
-    pkt_flow_t     *b = *(pkt_flow_t **) bp;
+    pkt_flow_t     *a;// = *(pkt_flow_t **) ap;
+    pkt_flow_t     *b;// = *(pkt_flow_t **) bp;
     uint64_t        var1, var2;
     uint32_t        Mbps, Bps;
+
+    if (reverse_order)
+    {
+	a = *(pkt_flow_t **) bp;
+	b = *(pkt_flow_t **) ap;
+    }
+    else
+    {
+	a = *(pkt_flow_t **) ap;
+	b = *(pkt_flow_t **) bp;
+    }
 
     Mbps = Bps = 0;
 
@@ -502,9 +696,105 @@ flow_cmp(void *ap, void *bp)
 }
 
 void
-deal_with_flow(char *key, pkt_flow_t * flow, GArray * array)
+deal_with_flow(char *key, void *flow, GArray *array)
 {
     g_array_append_val(array, flow);
+}
+
+gboolean
+order_aggregates(uint32_t *addr,
+	pkt_flow_aggregate_t *node, 
+	GArray *array)
+{
+    g_array_append_val(array, node);
+    return FALSE;
+}
+
+int
+report_talker(GArray *array)
+{
+    int i;
+    
+    for(i = 0; i < array->len; i++)
+    {
+	pkt_flow_aggregate_t *node;
+
+	if (report_dest_limit && i >= report_dest_limit)
+	    break;
+
+	node = g_array_index(array, pkt_flow_aggregate_t *, i);
+
+	printf("%4d. %-16s p=%-2d tp=%-12u tB=%-20llu\n", i+1,
+	    	inet_ntoa(*(struct in_addr *)&node->address),
+		node->protocol, node->packets, node->bytes_xferred);
+
+	free(node);
+    }
+}
+
+void
+report_aggregate(GArray *array)
+{
+    int i;
+
+    for(i = 0; i < array->len; i++)
+    {
+	pkt_flow_aggregate_t *node;
+	GArray *ordered_array;
+
+	if (report_top_limit && i >= report_top_limit)
+	    break;
+
+	node = g_array_index(array, pkt_flow_aggregate_t *, i);
+
+	printf("%-27s tp=%-12u tB=%-20llu dh=%d\n",
+	    inet_ntoa(*(struct in_addr *)&node->address),
+	    node->packets, node->bytes_xferred,
+	    g_tree_nnodes(node->talked_to));
+
+	if (quiet < 2)
+	{
+	    ordered_array = g_array_new(FALSE, FALSE,
+		sizeof(pkt_flow_aggregate_t *));
+
+	    g_tree_foreach(node->talked_to, 
+		(GTraverseFunc)order_aggregates,
+		ordered_array);
+
+	    g_array_sort(ordered_array,
+		(void *)aggregate_cmp);
+	
+	    report_talker(ordered_array);
+	    g_array_free(ordered_array, TRUE);
+	    printf("\n");
+	}
+
+	g_tree_destroy(node->talked_to);
+	free(node);
+    }
+}
+
+void
+report_aggregates(void)
+{
+    GArray *ordered_array;
+
+    if (aggregates == NULL)
+	return;
+
+    printf("\n-[ Aggregate report ]------------------------------------------------\n");
+    ordered_array = g_array_new(FALSE, FALSE, 
+	    sizeof(pkt_flow_aggregate_t *));
+
+    g_tree_foreach(aggregates,
+	    (GTraverseFunc)order_aggregates, ordered_array);
+
+    g_array_sort(ordered_array, 
+	    (void *)aggregate_cmp);
+
+    report_aggregate(ordered_array);
+    g_array_free(ordered_array, TRUE);
+    g_tree_destroy(aggregates);
 }
 
 void
@@ -563,13 +853,17 @@ report(int sock, short which, void *data)
     }
 
     if (stop_count && --count_stop <= 0)
+    {
+	report_aggregates();
 	exit(1);
+    }
 }
 
 void exit_prog(int sig)
 {
     signal(SIGINT, SIG_DFL);
     report(0, 0, NULL);
+    report_aggregates();
     exit(1);
 }
 

@@ -1,81 +1,210 @@
-Trafan (Traffic Analyzer) was created to give an admit a cursory glance into top
+Trafan (Traffic Analyzer) was created to give an admin a cursory glance into top
 talkers on a network. I originally wrote this to track down some bandwidth hogs, 
 but it has become very useful for other things. 
 
 
-Example usage:
+There are a range of options which tweak just how much detail you want to
+display.
 
-[root@sniffer mthomas]# ~mthomas/trafan -i bond0 -r 5 -l 10 
--- START 1268321553
-   1. 208.85.44.15:80       11.181.178.93:1763    tp=2729       tB=2258085    Bps=451617     Mbps=3 
-   2. 149.174.249.169:80    10.212.44.138:1123    tp=1184       tB=1193362    Bps=238672     Mbps=1 
-   3. 77.67.109.202:51727   11.181.90.66:2346     tp=1167       tB=1175722    Bps=235144     Mbps=1 
-   4. 10.212.52.178:1324    209.222.128.159:80    tp=1169       tB=1157528    Bps=231505     Mbps=1 
-   5. 10.123.3.10:50065     173.194.8.150:80      tp=1265       tB=1147123    Bps=229424     Mbps=1 
-   6. 10.66.178.53:49182    64.236.128.78:443     tp=1181       tB=1079384    Bps=215876     Mbps=1 
-   7. 68.33.5.164:5001      11.181.149.75:1631    tp=1010       tB=1031872    Bps=206374     Mbps=1 
-   8. 149.174.249.12:1935   10.123.3.153:55321    tp=985        tB=937232     Bps=468616     Mbps=3 
-   9. 11.181.173.214:42744  199.253.140.81:80     tp=844        tB=859374     Bps=214843     Mbps=1 
-  10. 199.80.53.100:80      10.212.31.42:2778     tp=802        tB=796664     Bps=159332     Mbps=1 
--- END   1268321558
-
--i bond0:  The interface to listen on.
--r 5:      5 is the amount of time (in seconds) to analyze traffic 
-           before display.
--l 10:     Limit the output to only the top 10 talkers. This is ordered 
-           by total bytes transferred. 
-
-Column 01: The Nth of the top X talkers.
-Column 02: The source address and source port of a flow.
-Column 03: The destination address and destination port of a flow.
-Column 04: Total packets seen within the given timeline.
-Column 05: Total bytes seen xferred within the given timeline.
-Column 06: Bytes per second.
-Column 07: Mega bits per second.
-
-[root@sniffer mthomas]# ~mthomas/trafan -i bond0 -r 1 -l 1 -q
-   1. 149.174.245.174:80    10.123.178.99:1713    tp=10918      tB=11079038   Bps=11079038   Mbps=84 
-   1. 10.123.178.99:1713    149.174.245.174:80    tp=9926       tB=10074462   Bps=10074462   Mbps=76 
-   1. 10.123.178.99:1713    149.174.245.174:80    tp=10711      tB=10876492   Bps=10876492   Mbps=82 
-   1. 10.123.178.99:1713    149.174.245.174:80    tp=10662      tB=10831628   Bps=10831628   Mbps=82 
-   1. 155.201.18.20:11160   10.123.177.185:1713   tp=1117       tB=617624     Bps=617624     Mbps=4 
-   1. 155.201.18.20:11160   10.123.177.185:1713   tp=1102       tB=619961     Bps=619961     Mbps=4 
-   1. 149.174.249.184:80    10.123.170.58:3461    tp=2358       tB=2561572    Bps=2561572    Mbps=19
-
--i bond0: The interface we are listening on.
--r 1:     The amount of time in seconds to analyze traffic.
--l 1:     Limit the output to only one top talker.
--q:       quiet output, (no START/END).
-
-This essentially gives us a realtime Mbps stat on ONLY the highest top talker.
-
-[root@sniffer mthomas]# ~mthomas/trafan -i bond0 -r 5 -l 3 -d
--- START 1268322243
-   1. 10.181.186.55:3614    208.85.44.13:80       tp=3859       tB=3895982    Bps=973995     Mbps=7 
-       Bps: 3895982  Mbps: 29
-       Bps: 0        Mbps: 0
-       Bps: 0        Mbps: 0
-       Bps: 0        Mbps: 0
-   2. 64.50.236.52:80       10.172.3.54:4215      tp=3281       tB=2861532    Bps=572306     Mbps=4 
-       Bps: 581440   Mbps: 4
-       Bps: 565286   Mbps: 4
-       Bps: 569074   Mbps: 4
-       Bps: 578372   Mbps: 4
-   3. 10.180.177.196:1874   208.111.160.6:80      tp=1691       tB=1698259    Bps=339651     Mbps=2 
-       Bps: 935038   Mbps: 7
-       Bps: 90583    Mbps: 0
-       Bps: 672638   Mbps: 5
-       Bps: 0        Mbps: 0
--- END   1268322248
+Column reference:
+p    = IP protocol
+tB   = total bytes transferred
+tp   = total packets seen
+Bps  = Bytes per second
+Mbps = Mega bits per second
 
 
--i bond0: blah blah
--r 5:     sample for 5 seconds.
--l 3:     limit to top 3 talkers.
--d:       we want to see second-by-second statistics on this flow within the sample time.
+Without any options set, trafan will report on all flows seen within a one
+second timeframe ordered by the total bytes transferred. 
 
--d is a good flag to use to determine if a top talker for one sample was just burst traffic
-   this will display a second-by-second runddown on the bytes xferred within that sampling
-   session.
+[mthomas@sniffer ~]$ sudo trafan 
+-- START 1272423.72 [ tB=4815778 Bps=4815778 Mbps=36 ]
+   1. 208.117.248.16:80     11.167.204.133:49265  p=6  tp=172        tB=235996     Bps=0          Mbps=0 
+   2. 192.58.183.83:80      11.167.180.168:1482   p=6  tp=92         tB=139288     Bps=0          Mbps=0 
+   3. 149.174.245.17:443    23.66.179.121:62590   p=6  tp=144        tB=131159     Bps=0          Mbps=0 
+   4. 208.117.248.84:80     23.147.1.73:4904      p=6  tp=69         tB=23.302     Bps=0          Mbps=0 
+   5. 68.227.207.83:22      23.181.188.173:64763  p=6  tp=59         tB=87942      Bps=0          Mbps=0 
+   6. 168.143.162.45:443    11.167.194.53:2629    p=6  tp=56         tB=84784      Bps=0          Mbps=0 
+   7. 208.111.161.44:80     23.181.253.23.2173    p=6  tp=53         tB=79742      Bps=0          Mbps=0 
+   8. 68.142.123.13:80      23.180.146.79:4579    p=6  tp=41         tB=62074      Bps=0          Mbps=0 
+<craploads of rows removed>
+-- END   1272423.73 [ pcap_recvd=15541 pcap_dropped=0 ]
 
-I highly suggest utilizing libpcap-1.0 since the direct kernel mmap is the bomb!
+Refer to the column reference above for what all the x=y stats mean.  The "-- START" 
+and "--END" markers display various statistics including the global bytes xferred, 
+bytes per second, and mega bits per second.
+
+On a high-traffic segment this output is way too large to quickly glance at and 
+say "oh yeah, this host sucks". So we can limit the output using the -l flag:
+
+[mthomas@sniffer ~]$ sudo trafan -l 5 
+-- START 1272423.16 [ tB=6478154 Bps=6478154 Mbps=49 ]
+   1. 192.58.183.83:80      23.167.180.168:1523   p=6  tp=325        tB=492050     Bps=492050     Mbps=3 
+   2. 149.174.245.12:1935   23.172.4.132:61576    p=6  tp=299        tB=378219     Bps=378219     Mbps=2 
+   3. 149.174.249.145:80    23.147.1.223:2068     p=6  tp=159        tB=240726     Bps=240726     Mbps=1 
+   4. 23.181.188.173:64763  68.227.207.83:22      p=6  tp=158        tB=213384     Bps=213384     Mbps=1 
+   5. 174.120.23..194:80    23.172.23.29:54750    p=6  tp=152        tB=211158     Bps=211158     Mbps=1 
+-- END   1272423.17 [ pcap_recvd=45605 pcap_dropped=0 ]
+
+You can also tweak the -r (runtime) option to only display a report every x seconds. If this flag is 
+specified you can also utilize the -d flag. The -d flag will give you a second-by-second rundown for 
+that particular flow. 
+
+[mthomas@sniffer ~]$ sudo trafan -l 5 -r 3 -d
+-- START 12724123.5 [ tB=21413542 Bps=0 Mbps=0 ]
+   1. 149.174.249.139:80    23.181.188.80:623.5   p=6  tp=6391       tB=9230786    Bps=3076928    Mbps=23 
+      Bps=2985050    Mbps=22        
+      Bps=3114052    Mbps=23        
+   2. 192.58.183.83:80      23.167.180.168:1523   p=6  tp=23.3       tB=1654802    Bps=551600     Mbps=4 
+      Bps=546554     Mbps=4         
+      Bps=542012     Mbps=4         
+   3. 77.67.23..152:323.6   23.180.90.66:2567     p=6  tp=617        tB=930604     Bps=323.01     Mbps=2 
+      Bps=501452     Mbps=3         
+      Bps=156258     Mbps=1         
+   4. 199.7.51.190:80       23.180.173.14:2155    p=6  tp=804        tB=912663     Bps=304221     Mbps=2 
+      Bps=582729     Mbps=4         
+      Bps=329934     Mbps=2         
+   5. 149.174.245.17:443    23.66.179.121:62590   p=6  tp=732        tB=698043     Bps=232681     Mbps=1 
+      Bps=242580     Mbps=1         
+      Bps=229218     Mbps=1         
+-- END   12724123.8 [ pcap_recvd=28176 pcap_dropped=0 ]
+
+The above command line tells trafan the following:
+-l 5: limit the output to the top 5 flows
+-r 3: display a report every 3 seconds
+-d:   display second-by-second rundown of each flow
+
+We might want to use these options to determine if a flow is burst traffic, or sustained. 
+
+Trafan can also completely disable flows. This allows for each address to get their own 
+separate (aggregated) flow.
+
+[mthomas@sniffer ~]$ sudo trafan -l23.-r3 -c1 -a
+-- START 1272411259 [ tB=33869543 Bps=0 Mbps=0 ]
+   1. 208.85.8.49:0         0.0.0.0:0             p=6  tp=11139      tB=15973326   Bps=5324442    Mbps=40 
+   2. 149.174.249.187:0     0.0.0.0:0             p=6  tp=2586       tB=3656604    Bps=1218868    Mbps=9 
+   3. 63.214.21.123:0       0.0.0.0:0             p=6  tp=2337       tB=3531294    Bps=1177098    Mbps=8 
+   4. 192.58.183.83:0       0.0.0.0:0             p=6  tp=1145       tB=1733530    Bps=577843     Mbps=4 
+   5. 149.174.245.17:0      0.0.0.0:0             p=6  tp=660        tB=821595     Bps=273865     Mbps=2 
+   6. 149.174.249.138:0     0.0.0.0:0             p=6  tp=513        tB=738383     Bps=246127     Mbps=1 
+   7. 68.227.207.83:0       0.0.0.0:0             p=6  tp=457        tB=582666     Bps=194222     Mbps=1 
+   8. 64.236.128.78:0       0.0.0.0:0             p=17 tp=564        tB=317323.    Bps=23.770     Mbps=0 
+   9. 64.236.208.154:0      0.0.0.0:0             p=6  tp=289        tB=309349     Bps=23.116     Mbps=0 
+  23. 64.236.136.25:0       0.0.0.0:0             p=17 tp=953        tB=303422     Bps=23.140     Mbps=0 
+-- END   1272411262 [ pcap_recvd=42330 pcap_dropped=0 ]
+
+As you can see there are no flows here. Every address is considered a "source address" and get their
+own stats. Another flag is seen here, "-c1". This basically says to stop the program after 1 window
+is displayed. 
+
+You can use the quiet flag (-q) to tell trafan to omit the start and end headers. Also if a limit of 
+1 is set, no newlines are inserted. This allows for a quick glance of who the hell is slamming your
+network:
+
+[mthomas@sniffer ~]$ sudo trafan -l1 -q
+   1. 192.58.183.83:80      23.167.180.168:1523   p=6  tp=384        tB=581376     Bps=581376     Mbps=4 
+   1. 192.58.183.83:80      23.167.180.168:1523   p=6  tp=385        tB=582890     Bps=582890     Mbps=4 
+   1. 192.58.183.83:80      23.167.180.168:1523   p=6  tp=377        tB=570778     Bps=570778     Mbps=4 
+   1. 192.58.183.83:80      23.167.180.168:1523   p=6  tp=384        tB=581376     Bps=581376     Mbps=4 
+   1. 192.58.183.83:80      23.167.180.168:1523   p=6  tp=377        tB=570778     Bps=570778     Mbps=4 
+   1. 192.58.183.83:80      23.167.180.168:1523   p=6  tp=363        tB=549582     Bps=549582     Mbps=4 
+   1. 192.58.183.83:80      23.167.180.168:1523   p=6  tp=349        tB=528386     Bps=528386     Mbps=4
+
+Ordering of the columns can be changed by the various -O flags:
+-Op to order the output by the total number of packets.
+-Ob to order the output by bytes per second
+-Om to order the output by mega bits per second
+-OB to order the output by total bytes (the default)
+
+Another interesting option is the at-exit reporting flag. Reporting has its own small set of 
+flags used for ordering and limiting.
+-R      to enable reporting
+-Lx:y   limits the output where x is the number of source hosts, and y being the number of 
+        destination hosts. 
+-op:    Order the aggregation report by packet counts
+-oB:    Order the aggregation report by total bytes
+-oh;    Order the aggregation report by the total number of distinct destination
+        hosts were seen for that source address.
+
+It is very easy to stop p2p users using the reporting mechanism:
+
+[mthomas@sniffer ~]$ sudo trafan -l3 -L2:30 -R -oh -c 10
+.... normal data output seen 23.times (-c) ....
+
+-[ Aggregate report ]------------------------------------------------
+23.172.4.147                tp=56           tB=8078                 dh=56
+   1. 68.152.64.2      p=1  tp=1            tB=145                 
+   2. 74.15.30.4       p=1  tp=1            tB=145                 
+   3. 76.71.176.8      p=1  tp=1            tB=145                 
+   4. 99.57.41.12      p=1  tp=1            tB=145                 
+   5. 85.201.14.20     p=1  tp=1            tB=145                 
+   6. 93.16.212.20     p=1  tp=1            tB=145                 
+   7. 88.151.86.21     p=1  tp=1            tB=145                 
+   8. 61.71.17.51      p=1  tp=1            tB=145                 
+   9. 99.27.134.53     p=1  tp=1            tB=145                 
+  23. 95.79.54.54      p=1  tp=1            tB=145                 
+  11. 217.155.177.54   p=1  tp=1            tB=145                 
+  12. 65.188.219.54    p=1  tp=1            tB=145                 
+  13. 87.0.223.56      p=1  tp=1            tB=145                 
+  14. 23..123.232.62   p=1  tp=1            tB=145                 
+  15. 154.20.22.63     p=1  tp=1            tB=145                 
+  16. 201.38.12.66     p=1  tp=1            tB=145                 
+  17. 217.127.183.68   p=1  tp=1            tB=145                 
+  18. 67.47.153.70     p=1  tp=1            tB=145                 
+  19. 207.216.5.71     p=1  tp=1            tB=145                 
+  20. 187.2.173.73     p=1  tp=1            tB=145                 
+  21. 95.59.191.79     p=1  tp=1            tB=145                 
+  22. 67.49.195.23.    p=1  tp=1            tB=145                 
+  23. 74.230.9.113     p=1  tp=1            tB=145                 
+  24. 95.19.153.119    p=1  tp=1            tB=145                 
+  25. 82.43.58.135     p=1  tp=1            tB=145                 
+  26. 79.164.89.135    p=1  tp=1            tB=145                 
+  27. 99.23..253.137   p=1  tp=1            tB=145                 
+  28. 174.23..237.139  p=1  tp=1            tB=145                 
+  29. 116.55.16.143    p=1  tp=1            tB=145                 
+  30. 95.19.4.145      p=1  tp=1            tB=145                 
+
+23.172.8.13                 tp=1321         tB=935849               dh=33
+   1. 83.176.236.82    p=1  tp=413          tB=275522              
+   2. 96.61.16.127     p=1  tp=364          tB=223524              
+   3. 76.27.252.37     p=6  tp=244          tB=220496              
+   4. 24.139.61.117    p=6  tp=190          tB=153424              
+   5. 58.240.23..30    p=6  tp=67           tB=56178               
+   6. 98.230.242.161   p=6  tp=3            tB=533                 
+   7. 65.55.158.116    p=1  tp=5            tB=470                 
+   8. 82.2.34.39       p=1  tp=4            tB=450                 
+   9. 62.3.255.41      p=6  tp=2            tB=421                 
+  23. 59.23..158.23.   p=6  tp=1            tB=349                 
+  11. 78.166.174.179   p=6  tp=1            tB=349                 
+  12. 118.172.73.243   p=1  tp=1            tB=323                 
+  13. 24.72.207.186    p=1  tp=1            tB=319                 
+  14. 203.206.23.30    p=1  tp=2            tB=307                 
+  15. 65.55.158.118    p=1  tp=3            tB=306                 
+  16. 68.125.216.75    p=6  tp=2            tB=296                 
+  17. 94.245.115.188   p=1  tp=2            tB=204                 
+  18. 41.0.52.40       p=6  tp=1            tB=158                 
+  19. 85.72.232.45     p=6  tp=1            tB=148                 
+  20. 87.48.29.54      p=6  tp=1            tB=148                 
+  21. 89.247.54.60     p=6  tp=1            tB=148                 
+  22. 213.89.69.73     p=6  tp=1            tB=148                 
+  23. 125.236.168.81   p=6  tp=1            tB=148                 
+  24. 81.23..4.93      p=6  tp=1            tB=148                 
+  25. 82.181.231.93    p=6  tp=1            tB=148                 
+  26. 174.71.16.23.    p=6  tp=1            tB=148                 
+  27. 85.243.17.138    p=6  tp=1            tB=148                 
+  28. 220.133.23..143  p=6  tp=1            tB=148                 
+  29. 96.48.41.151     p=6  tp=1            tB=148                 
+  30. 217.131.67.183   p=6  tp=1            tB=148
+
+In the above example we wanted to see the top 2 source addresses and the top 30 destination hosts 
+they talked to. After running for 23.seconds the report is displayed. 
+
+The first IP address is the source address, along with tp (total packets), tB (total bytes), and
+finally dh (unique destination hosts).
+
+Looking at that output it is very easy to see that these two source addresses are doing some
+hot p2p action. Large number of completely autonomous destination addresses.  
+
+ 
+
+
