@@ -13,9 +13,8 @@ tp   = total packets seen
 Bps  = Bytes per second
 Mbps = Mega bits per second
 
-
 Without any options set, trafan will report on all flows seen within a one
-second timeframe ordered by the total bytes transferred. 
+second timeframe, ordered by the total bytes transferred. 
 
 [mthomas@sniffer ~]$ sudo trafan 
 -- START 1272423.72 [ tB=4815778 Bps=4815778 Mbps=36 ]
@@ -30,12 +29,11 @@ second timeframe ordered by the total bytes transferred.
 <craploads of rows removed>
 -- END   1272423.73 [ pcap_recvd=15541 pcap_dropped=0 ]
 
-Refer to the column reference above for what all the x=y stats mean.  The "-- START" 
-and "--END" markers display various statistics including the global bytes xferred, 
-bytes per second, and mega bits per second.
+The "START" and "END" and markers display statistics for the global bytes xferred, bytes per second, 
+and mega bits per second.
 
-On a high-traffic segment this output is way too large to quickly glance at and 
-say "oh yeah, this host sucks". So we can limit the output using the -l flag:
+On a high-traffic segment this output is too verbose to gather any good information from, so it's 
+usually a good idea to limit this output via the "-l" flag. 
 
 [mthomas@sniffer ~]$ sudo trafan -l 5 
 -- START 1272423.16 [ tB=6478154 Bps=6478154 Mbps=49 ]
@@ -46,9 +44,9 @@ say "oh yeah, this host sucks". So we can limit the output using the -l flag:
    5. 174.120.23..194:80    23.172.23.29:54750    p=6  tp=152        tB=211158     Bps=211158     Mbps=1 
 -- END   1272423.17 [ pcap_recvd=45605 pcap_dropped=0 ]
 
-You can also tweak the -r (runtime) option to only display a report every x seconds. If this flag is 
-specified you can also utilize the -d flag. The -d flag will give you a second-by-second rundown for 
-that particular flow. 
+If you would like to display the time in which data is displayed you use the runtime '-r' flag.
+You can use this in conjunction with the -d flag (details) which will display a second-by-second 
+rundown for a particular flow.
 
 [mthomas@sniffer ~]$ sudo trafan -l 5 -r 3 -d
 -- START 12724123.5 [ tB=21413542 Bps=0 Mbps=0 ]
@@ -74,10 +72,9 @@ The above command line tells trafan the following:
 -r 3: display a report every 3 seconds
 -d:   display second-by-second rundown of each flow
 
-We might want to use these options to determine if a flow is burst traffic, or sustained. 
+This is a good way to see whether a flow is burst or sustained.
 
-Trafan can also completely disable flows. This allows for each address to get their own 
-separate (aggregated) flow.
+You can also completely disable the flow functionality in order to see a plain old top-talkers output.
 
 [mthomas@sniffer ~]$ sudo trafan -l23.-r3 -c1 -a
 -- START 1272411259 [ tB=33869543 Bps=0 Mbps=0 ]
@@ -93,13 +90,10 @@ separate (aggregated) flow.
   23. 64.236.136.25:0       0.0.0.0:0             p=17 tp=953        tB=303422     Bps=23.140     Mbps=0 
 -- END   1272411262 [ pcap_recvd=42330 pcap_dropped=0 ]
 
-As you can see there are no flows here. Every address is considered a "source address" and get their
-own stats. Another flag is seen here, "-c1". This basically says to stop the program after 1 window
-is displayed. 
+Every address here is considered its own flow. The -c1 flag above tells the program to exit after 1 
+report is displayed.
 
-You can use the quiet flag (-q) to tell trafan to omit the start and end headers. Also if a limit of 
-1 is set, no newlines are inserted. This allows for a quick glance of who the hell is slamming your
-network:
+Using the -q flag will omit some of the extranious data displayed. 
 
 [mthomas@sniffer ~]$ sudo trafan -l1 -q
    1. 192.58.183.83:80      23.167.180.168:1523   p=6  tp=384        tB=581376     Bps=581376     Mbps=4 
@@ -124,7 +118,7 @@ flags used for ordering and limiting.
 -op:    Order the aggregation report by packet counts
 -oB:    Order the aggregation report by total bytes
 -oh;    Order the aggregation report by the total number of distinct destination
-        hosts were seen for that source address.
+        hosts. 
 
 It is very easy to stop p2p users using the reporting mechanism:
 
