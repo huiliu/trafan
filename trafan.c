@@ -963,6 +963,8 @@ do_offline_analysis(void)
             report(0, 0, NULL);
         }
     }
+
+    report(0, 0, NULL);
 }
 
 int
