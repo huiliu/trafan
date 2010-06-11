@@ -198,3 +198,10 @@ finally dh (unique destination hosts).
 
 Looking at that output it is very easy to see that these two source addresses are doing some
 hot p2p action. Large number of completely autonomous destination addresses.  
+
+
+---
+
+All of these options can be used with an offline pcap reader specified by the 
+-p <pcapfile> option. This will do the same statistics but utilizing a pcap
+file.
