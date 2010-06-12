@@ -53,6 +53,7 @@ typedef struct pkt_flow {
     uint64_t     total_packets;
     uint8_t      proto;
     GPtrArray   *bytes_per_sec;
+    GString     *payload;
     struct event timer;
 } pkt_flow_t;
 
@@ -79,10 +80,12 @@ char        *iface;
 int          quiet;
 uint64_t     global_bytes_xferred;
 uint32_t     global_time;
+uint64_t     global_packets;
 int          reverse_order;
 order_by_t   order_by;
 order_by_t   aggregate_order_by;
 char        *pcap_in_file;
+int          display_payload;
 
 /*
  * if the aggregate option is set, we don't use a flow, but we see a per
@@ -98,6 +101,7 @@ void            free_flow_tbl(pkt_flow_t * flow);
 void
 globals_init(void)
 {
+    display_payload = 0;
     quiet = 0;
     debug = 0;
     bpf = NULL;
@@ -142,6 +146,10 @@ free_flow_tbl(pkt_flow_t * flow)
         evtimer_del(&flow->timer);
     }
 
+    if (display_payload && flow->payload != NULL) {
+        g_string_free(flow->payload, TRUE);
+    }
+
     if (detail) {
         g_ptr_array_foreach(flow->bytes_per_sec,
                             (void *)free_bps_node, NULL);
@@ -171,11 +179,14 @@ parse_args(int argc, char **argv)
     int   c;
     char *tok;
 
-    while ((c = getopt(argc, argv, "nhRqL:l:di:f:r:Dac:O:o:p:")) != -1) {
+    while ((c = getopt(argc, argv, "nhRqL:l:di:f:r:Dac:O:o:p:X")) != -1) {
         switch (c) {
 
             case 'D':
                 debug++;
+                break;
+            case 'X':
+                display_payload = 1;
                 break;
             case 'p':
                 pcap_in_file = optarg;
@@ -190,11 +201,12 @@ parse_args(int argc, char **argv)
                 bpf = optarg;
                 break;
             case 'r':
-		if (*optarg == '-')
-		    runtime = 0x7FFFFFFF;
-		else
-		    runtime = atoi(optarg);
-		printf("%d\n", runtime);
+                if (*optarg == '-') {
+                    runtime = 0x7FFFFFFF;
+                } else{
+                    runtime = atoi(optarg);
+                }
+                printf("%d\n", runtime);
                 break;
             case 'l':
                 top_limit = atoi(optarg);
@@ -233,8 +245,8 @@ parse_args(int argc, char **argv)
                         break;
                     default:
                         printf
-                              ("Unknown ordering %c, using default (order by total bytes)\n",
-                              *optarg);
+                                        ("Unknown ordering %c, using default (order by total bytes)\n",
+                                        *optarg);
                         break;
                 }
                 break;
@@ -428,6 +440,11 @@ find_flow(uint32_t src_addr, uint16_t src_port,
         flow->bytes_per_sec = g_ptr_array_new();
     }
 
+    if (display_payload) {
+        printf("JFKDJLFDS\n");
+        flow->payload = g_string_new(NULL);
+    }
+
     if (pcap_in_file == NULL) {
         tv.tv_sec = 1;
         tv.tv_usec = 0;
@@ -441,6 +458,58 @@ find_flow(uint32_t src_addr, uint16_t src_port,
     return(flow);
 } /* find_flow */
 
+void
+print_hex(const unsigned char *data, int len)
+{
+    int   i, line_buf_off;
+    char *line_buf = NULL;
+    int   spaces_left;
+    char *spaces = "                                          ";
+
+    line_buf     = calloc(len + 30, 1);
+    line_buf_off = 0;
+    spaces_left  = 41;
+
+    printf(" ");
+
+    for (i = 0; i < len; i++) {
+        if (i && !(i % 16)) {
+            printf(" %s\n", line_buf);
+            bzero(line_buf, len + 30);
+            line_buf_off = -1;
+            spaces_left  = 41;
+        }
+
+        if (line_buf_off < 0) {
+            line_buf[++line_buf_off] = 'f';
+        }
+
+        if (line_buf_off >= 0) {
+            if (isprint(data[i]) && !isspace(data[i])) {
+                line_buf[line_buf_off] = data[i];
+            } else{
+                line_buf[line_buf_off] = '.';
+            }
+
+        }
+
+        if (i && !(i % 2)) {
+            spaces_left -= 1;
+            printf(" ");
+        }
+
+        printf("%2.2X", data[i]);
+        line_buf_off++;
+
+        spaces_left -= 2;
+    }
+
+    printf("%.*s%s\n\n", spaces_left,
+           spaces, line_buf);
+
+    free(line_buf);
+
+} /* print_hex */
 
 void
 packet_handler(const unsigned char *arg,
@@ -450,12 +519,15 @@ packet_handler(const unsigned char *arg,
                    dst_addr;
     uint16_t       src_port,
                    dst_port;
+    uint16_t       toff;
     uint32_t       ip_proto;
     struct ip     *ip4;
     struct udphdr *udp;
     struct tcphdr *tcp;
     uint32_t       ip_hl;
     pkt_flow_t    *flow;
+    char          *data;
+    char          *pkt_end;
 
     if (hdr->caplen < sizeof(struct ip) + 14) {
         return;
@@ -466,6 +538,10 @@ packet_handler(const unsigned char *arg,
     if (ip4->ip_v != 4) {
         return;
     }
+
+    pkt_end = (char *)(pkt + hdr->caplen);
+
+    data = NULL;
 
     src_addr = ip4->ip_src.s_addr;
     dst_addr = ip4->ip_dst.s_addr;
@@ -482,6 +558,9 @@ packet_handler(const unsigned char *arg,
             udp = (struct udphdr *)((unsigned char *)(ip4) + ip_hl);
             src_port = udp->uh_sport;
             dst_port = udp->uh_dport;
+
+            toff = sizeof(struct udphdr);
+            data = (char *)((char *)udp + toff);
             break;
         case IPPROTO_TCP:
             if (hdr->caplen < sizeof(struct ip) + 14 +
@@ -492,6 +571,9 @@ packet_handler(const unsigned char *arg,
             tcp = (struct tcphdr *)((unsigned char *)(ip4) + ip_hl);
             src_port = tcp->th_sport;
             dst_port = tcp->th_dport;
+
+            toff = (tcp->th_off * 4);
+            data = (unsigned char *)((unsigned char *)tcp + toff);
             break;
         default:
             src_port = 0;
@@ -510,11 +592,17 @@ packet_handler(const unsigned char *arg,
     flow->total_packets += 1;
     flow->proto = ip_proto;
 
+    gssize slen = pkt_end - data;
+    if (display_payload) {
+        g_string_append_len(flow->payload, data, slen);
+    }
+
     if (aggregates) {
         do_aggregate(src_addr, dst_addr, hdr->len, ip_proto);
     }
 
     global_bytes_xferred += hdr->len;
+    global_packets++;
 } /* packet_handler */
 
 
@@ -628,12 +716,17 @@ print_flow(pkt_flow_t * flow)
     printf("Bps=%-10u ", Bps);
     printf("Mbps=%u ", Mbps);
 
+
     if (detail) {
         printf("\n");
         g_ptr_array_foreach(flow->bytes_per_sec,
                             (void *)deal_with_bps_node, NULL);
     } else{
         printf("%s", top_limit != 1 ? "\n" : "");
+    }
+
+    if (display_payload) {
+        print_hex(flow->payload->str, flow->payload->len);
     }
 
 }
@@ -836,8 +929,8 @@ report_aggregates(void)
         return;
     }
 
-    printf
-                  ("\n-[ Aggregate report ]------------------------------------------------\n");
+    printf("\n-[ Aggregate report ]------------------------------------------------\n");
+
     ordered_array =
         g_array_new(FALSE, FALSE, sizeof(pkt_flow_aggregate_t *));
 
@@ -865,12 +958,13 @@ report(int sock, short which, void *data)
         calculate_ps(global_time, global_bytes_xferred,
                      &global_Mbps, &global_Bps);
 
-        printf("-- START %ld [ tB=%llu Bps=%u Mbps=%u ]\n",
+        printf("-- START %ld [ tB=%llu Bps=%u Mbps=%u pkts=%llu ]\n",
                time(NULL) - runtime, global_bytes_xferred,
-               global_Bps, global_Mbps);
+               global_Bps, global_Mbps, global_packets);
 
         global_bytes_xferred = 0;
-        global_time = time(NULL);
+        global_packets       = 0;
+        global_time          = time(NULL);
     } else{
         printf("%s", g_hash_table_size(flow_tbl) ? "\n" : "");
     }
