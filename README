@@ -199,6 +199,74 @@ finally dh (unique destination hosts).
 Looking at that output it is very easy to see that these two source addresses are doing some
 hot p2p action. Large number of completely autonomous destination addresses.  
 
+---
+You can utilize the -X flag to show client and server payloads of a flow:
+
+mthomas@atticus:~/trafan$ sudo ./trafan -r 1 -l 2 -f "port 80" -X -s 0
+-- START 1276380942 [ tB=0 Bps=0 Mbps=0 pkts=0 ]
+-- END   1276380943 [ pcap_recvd=0 pcap_dropped=0 ]
+
+-- START 1276380943 [ tB=1109 Bps=1109 Mbps=0 pkts=4 ]
+   1. 96.241.224.115:56561  174.133.249.147:80    p=6  tp=4          tB=1109 Bps=0          Mbps=0 
+      4745 5420 2F20 4854 5450 2F31 2E31 0D0A GET./.HTTP/1.1..
+      5573 6572 2D41 6765 6E74 3A20 6375 726C User-Agent:.curl
+      2F37 2E31 392E 3720 2875 6E69 7665 7273 /7.19.7.(univers
+      616C 2D61 7070 6C65 2D64 6172 7769 6E31 al-apple-darwin1
+      302E 3029 206C 6962 6375 726C 2F37 2E31 0.0).libcurl/7.1
+      392E 3720 4F70 656E 5353 4C2F 302E 392E 9.7.OpenSSL/0.9.
+      386C 207A 6C69 622F 312E 322E 330D 0A48 8l.zlib/1.2.3..H
+      6F73 743A 2072 656E 6165 2E6F 7267 0D0A ost:.renae.org..
+      4163 6365 7074 3A20 2A2F 2A0D 0A0D 0A   Accept:.*/*....
+
+      4854 5450 2F31 2E31 2032 3030 204F 4B0D HTTP/1.1.200.OK.
+      0A53 6572 7665 723A 206E 6769 6E78 0D0A .Server:.nginx..
+      4461 7465 3A20 5361 742C 2031 3220 4A75 Date:.Sat,.12.Ju
+      6E20 3230 3130 2032 323A 3135 3A34 3420 n.2010.22:15:44.
+      474D 540D 0A43 6F6E 7465 6E74 2D54 7970 GMT..Content-Typ
+      653A 2074 6578 742F 6874 6D6C 0D0A 436F e:.text/html..Co
+      6E74 656E 742D 4C65 6E67 7468 3A20 3437 ntent-Length:.47
+      330D 0A4C 6173 742D 4D6F 6469 6669 6564 3..Last-Modified
+      3A20 4D6F 6E2C 2030 3320 4D61 7920 3230 :.Mon,.03.May.20
+      3130 2032 313A 3136 3A32 3720 474D 540D 10.21:16:27.GMT.
+      0A43 6F6E 6E65 6374 696F 6E3A 206B 6565 .Connection:.kee
+      702D 616C 6976 650D 0A41 6363 6570 742D p-alive..Accept-
+      5261 6E67 6573 3A20 6279 7465 730D 0A0D Ranges:.bytes...
+      0A3C 6874 6D6C 3E0A 3C74 6974 6C65 3E72 .<html>.<title>r
+      2065 206E 2061 2065 202E 206F 2072 2067 .e.n.a.e...o.r.g
+      3C2F 7469 746C 653E 0A3C 626F 6479 2062 </title>.<body.b
+      6163 6B67 726F 756E 643D 222E 2E2F 7069 ackground="../pi
+      6374 7572 6573 2F62 6163 6B67 726F 756E ctures/backgroun
+      642E 706E 6722 3E0A 3C74 6162 6C65 2062 d.png">.<table.b
+      6F72 6465 723D 2230 2220 6865 6967 6874 order="0".height
+      3D22 3130 3025 2220 7769 6474 683D 2231 ="100%".width="1
+      3030 2522 3E0A 093C 7472 3E0A 093C 7464 00%">..<tr>..<td
+      2076 616C 6967 6E3D 2263 656E 7465 7222 .valign="center"
+      3E3C 696D 6720 7372 633D 222E 2E2F 7069 ><img.src="../pi
+      6374 7572 6573 2F72 656E 6165 6461 6E63 ctures/renaedanc
+      652D 736D 616C 6C2E 706E 6722 3E3C 2F74 e-small.png"></t
+      643E 0A09 3C74 6420 7661 6C69 676E 3D22 d>..<td.valign="
+      6365 6E74 6572 223E 3C61 2068 7265 663D center"><a.href=
+      2268 7474 703A 2F2F 7374 7566 662E 7265 "http://stuff.re
+      6E61 652E 6F72 6722 3E72 2065 2061 2064 nae.org">r.e.a.d
+      3C2F 613E 0A09 3C62 723E 3C61 2068 7265 </a>..<br><a.hre
+      663D 2268 7474 703A 2F2F 696E 656C 7563 f="http://ineluc
+      7461 626C 652E 6F72 672F 616C 6275 6D2F table.org/album/
+      223E 6C20 6F20 6F20 6B3C 2F61 3E3C 2F74 ">l.o.o.k</a></t
+      643E 0A09 3C74 6420 7661 6C69 676E 3D22 d>..<td.valign="
+      626F 7474 6F6D 2220 7661 6C69 676E 3D22 bottom".valign="
+      7269 6768 7422 203E 3C69 6D67 2073 7263 right".><img.src
+      3D22 2E2E 2F70 6963 7475 7265 732F 7265 ="../pictures/re
+      6E61 652D 6261 636B 6875 7274 2D73 6D61 nae-backhurt-sma
+      6C6C 2E70 6E67 2220 7769 6474 683D 2232 ll.png".width="2
+      3030 223E 3C2F 7464 3E0A 093C 2F74 723E 00"></td>..</tr>
+      0A3C 2F74 6162 6C65 3E0A 3C2F 626F 6479 .</table>.</body
+      3E0A 3C2F 6874 6D6C 3E0A                >.</html>.
+
+-- END   1276380944 [ pcap_recvd=13 pcap_dropped=0 ]
+
+The first dump is what trafan saw as the client, while the second dump 
+would be what trafan saw as the server.
+
 
 ---
 

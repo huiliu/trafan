@@ -53,7 +53,8 @@ typedef struct pkt_flow {
     uint64_t     total_packets;
     uint8_t      proto;
     GPtrArray   *bytes_per_sec;
-    GString     *payload;
+    GString     *client_payload;
+    GString     *server_payload;
     struct event timer;
 } pkt_flow_t;
 
@@ -65,6 +66,11 @@ typedef enum {
     ORDER_BY_DESTINATION_COUNT
 } order_by_t;
 
+typedef enum {
+    DIRECTION_CLIENT = 1,
+    DIRECTION_SERVER
+} direction_t;
+
 struct event pcap_event;
 struct event stop_event;
 int          debug;
@@ -75,6 +81,7 @@ int          report_top_limit;
 int          report_dest_limit;
 int          stop_count;
 int          count_stop;
+int          snaplen;
 char        *bpf;
 char        *iface;
 int          quiet;
@@ -120,6 +127,7 @@ globals_init(void)
     pcap_in_file = NULL;
     order_by = ORDER_BY_TOTAL_BYTES;
     aggregate_order_by = ORDER_BY_TOTAL_BYTES;
+    snaplen = 90;
 
     flow_tbl = g_hash_table_new_full(g_str_hash, g_str_equal,
                                      NULL, (void *)free_flow_tbl);
@@ -146,8 +154,13 @@ free_flow_tbl(pkt_flow_t * flow)
         evtimer_del(&flow->timer);
     }
 
-    if (display_payload && flow->payload != NULL) {
-        g_string_free(flow->payload, TRUE);
+    if (display_payload) {
+        if (flow->client_payload) {
+            g_string_free(flow->client_payload, TRUE);
+        }
+        if (flow->server_payload) {
+            g_string_free(flow->server_payload, TRUE);
+        }
     }
 
     if (detail) {
@@ -179,12 +192,20 @@ parse_args(int argc, char **argv)
     int   c;
     char *tok;
 
-    while ((c = getopt(argc, argv, "nhRqL:l:di:f:r:Dac:O:o:p:X")) != -1) {
+    while ((c = getopt(argc, argv, "s:nhRqL:l:di:f:r:Dac:O:o:p:X")) != -1) {
         switch (c) {
 
             case 'D':
                 debug++;
                 break;
+	    case 's':
+		snaplen = atoi(optarg);
+
+		if (snaplen == 0) {
+		    snaplen = 65535;
+		}
+
+		break;
             case 'X':
                 display_payload = 1;
                 break;
@@ -206,7 +227,6 @@ parse_args(int argc, char **argv)
                 } else{
                     runtime = atoi(optarg);
                 }
-                printf("%d\n", runtime);
                 break;
             case 'l':
                 top_limit = atoi(optarg);
@@ -244,9 +264,7 @@ parse_args(int argc, char **argv)
                         order_by = ORDER_BY_MBPS;
                         break;
                     default:
-                        printf
-                                        ("Unknown ordering %c, using default (order by total bytes)\n",
-                                        *optarg);
+                        printf ("Unknown ordering %c, using default (order by total bytes)\n", *optarg);
                         break;
                 }
                 break;
@@ -382,7 +400,8 @@ do_aggregate(uint32_t src_addr, uint32_t dst_addr, uint32_t bytes,
 
 pkt_flow_t     *
 find_flow(uint32_t src_addr, uint16_t src_port,
-          uint32_t dst_addr, uint16_t dst_port)
+          uint32_t dst_addr, uint16_t dst_port,
+          direction_t *direction)
 {
     char           buff[10 + 5 + 10 + 5 + 1];
     pkt_flow_t    *flow;
@@ -413,6 +432,8 @@ find_flow(uint32_t src_addr, uint16_t src_port,
         snprintf(buff, sizeof(buff) - 1, "%u%d%u%d",
                  src_addr, src_port, dst_addr, dst_port);
 
+        *direction = DIRECTION_SERVER;
+
         if ((flow = g_hash_table_lookup(flow_tbl, buff))) {
             return(flow);
         }
@@ -420,6 +441,8 @@ find_flow(uint32_t src_addr, uint16_t src_port,
 
     snprintf(buff, sizeof(buff) - 1, "%u%d%u%d",
              dst_addr, dst_port, src_addr, src_port);
+
+    *direction = DIRECTION_CLIENT;
 
     if ((flow = g_hash_table_lookup(flow_tbl, buff))) {
         return(flow);
@@ -441,8 +464,8 @@ find_flow(uint32_t src_addr, uint16_t src_port,
     }
 
     if (display_payload) {
-        printf("JFKDJLFDS\n");
-        flow->payload = g_string_new(NULL);
+        flow->client_payload = g_string_new(NULL);
+        flow->server_payload = g_string_new(NULL);
     }
 
     if (pcap_in_file == NULL) {
@@ -470,11 +493,13 @@ print_hex(const unsigned char *data, int len)
     line_buf_off = 0;
     spaces_left  = 41;
 
-    printf(" ");
+    printf("      ");
 
     for (i = 0; i < len; i++) {
         if (i && !(i % 16)) {
-            printf(" %s\n", line_buf);
+            /* we've reached enough bytes printed in hex
+             * to print the ascii linebuf */
+            printf(" %s\n     ", line_buf);
             bzero(line_buf, len + 30);
             line_buf_off = -1;
             spaces_left  = 41;
@@ -582,11 +607,12 @@ packet_handler(const unsigned char *arg,
 
     } /* switch */
 
-    if (!(flow = find_flow(src_addr, src_port, dst_addr, dst_port))) {
+    direction_t direction = 0;
+
+    if (!(flow = find_flow(src_addr, src_port, dst_addr, dst_port, &direction))) {
         return;
     }
 
-    LOG("blah: %u\n", hdr->len);
     flow->total_bytes_xferred += hdr->len;
     flow->current_bytes += hdr->len;
     flow->total_packets += 1;
@@ -594,7 +620,14 @@ packet_handler(const unsigned char *arg,
 
     gssize slen = pkt_end - data;
     if (display_payload) {
-        g_string_append_len(flow->payload, data, slen);
+        switch (direction) {
+            case DIRECTION_CLIENT:
+                g_string_append_len(flow->client_payload, data, slen);
+                break;
+            case DIRECTION_SERVER:
+                g_string_append_len(flow->server_payload, data, slen);
+                break;
+        }
     }
 
     if (aggregates) {
@@ -624,7 +657,7 @@ pcap_init(void)
     if (pcap_in_file) {
         pcap_desc = pcap_open_offline(pcap_in_file, errbuf);
     } else {
-        pcap_desc = pcap_open_live(iface, 90, 1, 0, errbuf);
+        pcap_desc = pcap_open_live(iface, snaplen, 1, 0, errbuf);
     }
 
     if (pcap_desc == NULL) {
@@ -726,7 +759,8 @@ print_flow(pkt_flow_t * flow)
     }
 
     if (display_payload) {
-        print_hex(flow->payload->str, flow->payload->len);
+        print_hex(flow->client_payload->str, flow->client_payload->len);
+        print_hex(flow->server_payload->str, flow->server_payload->len);
     }
 
 }
