@@ -190,7 +190,11 @@ parse_args(int argc, char **argv)
                 bpf = optarg;
                 break;
             case 'r':
-                runtime = atoi(optarg);
+		if (*optarg == '-')
+		    runtime = 0x7FFFFFFF;
+		else
+		    runtime = atoi(optarg);
+		printf("%d\n", runtime);
                 break;
             case 'l':
                 top_limit = atoi(optarg);
