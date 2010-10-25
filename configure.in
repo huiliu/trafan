@@ -1,0 +1,34 @@
+dnl configure.in source file; run autoconf to create configure script
+
+AC_REVISION($Revision: 1.2 $) dnl this revision of this configure.in
+AC_PREREQ(2.13)
+
+AC_INIT(trafan ,0.1.11, ellzey@strcpy.net)
+AC_CONFIG_HEADERS([config.h])
+
+AC_CONFIG_SRCDIR(Makefile.am)
+
+AC_CANONICAL_SYSTEM
+
+AM_INIT_AUTOMAKE
+
+AC_PROG_CC
+
+dnl Add -Wall if gcc
+if test "$GCC" = "yes"; then
+   CFLAGS="-Wall -Wextra $CFLAGS"
+fi
+
+AC_PROG_INSTALL
+AC_PROG_MAKE_SET
+AC_PROG_CPP
+
+dnl AM_MAINTAINER_MODE
+dnl AM_DISABLE_STATIC
+AM_PROG_LIBTOOL
+
+AC_SEARCH_LIBS(pcap_open_live, [pcap], , AC_MSG_ERROR([libpcap required]))
+PKG_CHECK_MODULES(libevent, [libevent], , AC_MSG_ERROR([libevent required]))
+PKG_CHECK_MODULES(libglib2, [glib-2.0], , AC_MSG_ERROR([glib-2.0 required]))
+
+AC_OUTPUT(Makefile)

@@ -1,0 +1,58 @@
+#!/bin/bash
+
+(test -d aux_files) || {
+ mkdir -p aux_files;
+}
+
+progvar ()
+{
+    #
+    # see if the first choice exists
+    #
+    local VV=$1; shift
+    local i
+    local R
+
+    eval R=\\\$"$VV"
+    eval R=$R
+
+    if [ x"${R}" \!= x"" ]; then
+        # the environment alread sets it
+        return;
+    fi
+
+    while [ $# -gt 0 -a x"$V" = x"" ]; do
+        type $1 > /dev/null 2>&1
+        if [[ $? = 0 ]]; then
+            V=$1
+        fi
+        shift;
+    done
+
+    eval $VV=$V
+    unset V
+}
+
+error () {
+    echo "$1: failed with $?"
+    exit 1
+}
+
+# find the apps and set if necessary
+progvar LIBTOOLIZE glibtoolize libtoolize
+progvar ACLOCAL aclocal
+progvar AUTOHEADER autoheader
+progvar AUTOCONF autoconf
+progvar AUTOMAKE automake
+progvar AUTORECONF autoreconf
+
+
+
+set -x
+${ACLOCAL} -I aux_files || error "${ACLOCAL}"
+${AUTOHEADER} || error "${AUTOHEADER}"
+${LIBTOOLIZE} --automake --copy --force --install || error "${LIBTOOLIZE}"
+${AUTOCONF} || error "${AUTOCONF}"
+${AUTOMAKE} --add-missing --copy --foreign || error "${AUTOMAKE}"
+
+set +x
