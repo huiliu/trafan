@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
+#include <inttypes.h>
 #include <time.h>
 #include <signal.h>
 #define __FAVOR_BSD
@@ -20,10 +21,12 @@
 #include <event.h>
 #include <glib.h>
 
-#define LOG(x, s...) do {                        \
-        if (!debug) { break; }                   \
+#define LOG(x, s ...) do {                       \
+        if (!debug) {                            \
+            break;                               \
+        }                                        \
         time_t t = time(NULL);                   \
-        char  *d = ctime(&t);                    \
+        char * d = ctime(&t);                    \
         fprintf(stderr, "%.*s %s[%d] %s(): ",    \
                 (int)strlen(d) - 1, d, __FILE__, \
                 __LINE__, __FUNCTION__);         \
@@ -36,12 +39,12 @@ typedef struct pkt_flow_aggregate {
     uint32_t address;
     uint32_t packets;
     uint8_t  top_level : 4;
-    uint8_t  protocol : 4;
+    uint8_t  protocol  : 4;
     uint64_t bytes_xferred;
     /*
      * tree of pkt_flow_aggregates
      */
-    GTree *talked_to;
+    GTree * talked_to;
 } pkt_flow_aggregate_t;
 
 typedef struct pkt_flow {
@@ -55,9 +58,9 @@ typedef struct pkt_flow {
     uint32_t     current_bytes;
     uint64_t     total_packets;
     uint8_t      proto;
-    GPtrArray   *bytes_per_sec;
-    GString     *client_payload;
-    GString     *server_payload;
+    GPtrArray  * bytes_per_sec;
+    GString    * client_payload;
+    GString    * server_payload;
     struct event timer;
 } pkt_flow_t;
 
@@ -85,8 +88,8 @@ unsigned int report_dest_limit;
 int          stop_count;
 int          count_stop;
 int          snaplen;
-char        *bpf;
-char        *iface;
+char       * bpf;
+char       * iface;
 int          quiet;
 uint64_t     global_bytes_xferred;
 uint32_t     global_time;
@@ -94,26 +97,26 @@ uint64_t     global_packets;
 int          reverse_order;
 order_by_t   order_by;
 order_by_t   aggregate_order_by;
-char        *pcap_in_file;
+char       * pcap_in_file;
 int          display_payload;
 
 /*
  * if the aggregate option is set, we don't use a flow, but we see a per
  * host statistics
  */
-uint32_t    aggregate_flows;
-pcap_t     *pcap_desc;
-GHashTable *flow_tbl;
-GTree      *aggregates;
+uint32_t     aggregate_flows;
+pcap_t     * pcap_desc;
+GHashTable * flow_tbl;
+GTree      * aggregates;
 
-void            free_flow_tbl(pkt_flow_t * flow);
+void free_flow_tbl(pkt_flow_t * flow);
 
 void
 globals_init(void) {
     display_payload      = 0;
     quiet                = 0;
     debug                = 0;
-    bpf                  = NULL;
+    bpf = NULL;
     iface                = "eth0";
     pcap_desc            = NULL;
     runtime              = 1;
@@ -172,7 +175,7 @@ free_flow_tbl(pkt_flow_t * flow) {
 }
 
 static int
-addr_cmp(const void *a, const void *b) {
+addr_cmp(const void * a, const void * b) {
     if (*(uint32_t *)a < *(uint32_t *)b) {
         return -1;
     }
@@ -185,9 +188,9 @@ addr_cmp(const void *a, const void *b) {
 }
 
 void
-parse_args(int argc, char **argv) {
-    int   c;
-    char *tok;
+parse_args(int argc, char ** argv) {
+    int    c;
+    char * tok;
 
     while ((c = getopt(argc, argv, "s:nhRqL:l:di:f:r:Dac:O:o:p:X")) != -1) {
         switch (c) {
@@ -206,7 +209,7 @@ parse_args(int argc, char **argv) {
                 display_payload = 1;
                 break;
             case 'p':
-                pcap_in_file    = optarg;
+                pcap_in_file = optarg;
                 break;
             case 'd':
                 detail++;
@@ -215,7 +218,7 @@ parse_args(int argc, char **argv) {
                 iface = optarg;
                 break;
             case 'f':
-                bpf   = optarg;
+                bpf = optarg;
                 break;
             case 'r':
                 if (*optarg == '-') {
@@ -225,12 +228,12 @@ parse_args(int argc, char **argv) {
                 }
                 break;
             case 'l':
-                top_limit        = atoi(optarg);
+                top_limit = atoi(optarg);
                 break;
             case 'L':
-                tok              = strtok(optarg, ":");
+                tok = strtok(optarg, ":");
                 report_top_limit = atoi(tok);
-                tok              = strtok(NULL, ":");
+                tok = strtok(NULL, ":");
                 if (tok) {
                     report_dest_limit = atoi(tok);
                 }
@@ -242,8 +245,8 @@ parse_args(int argc, char **argv) {
                 aggregate_flows = 1;
                 break;
             case 'c':
-                stop_count      = atoi(optarg);
-                count_stop      = stop_count;
+                stop_count = atoi(optarg);
+                count_stop = stop_count;
                 break;
             case 'O':
                 switch (*optarg) {
@@ -278,7 +281,7 @@ parse_args(int argc, char **argv) {
                 }
                 break;
             case 'R':
-                aggregates    = g_tree_new((GCompareFunc)addr_cmp);
+                aggregates = g_tree_new((GCompareFunc)addr_cmp);
                 break;
             case 'n':
                 reverse_order = 1;
@@ -309,11 +312,11 @@ parse_args(int argc, char **argv) {
                 exit(1);
         } /* switch */
     }
-} /* parse_args */
+}         /* parse_args */
 
 void
 do_flow_transforms(int sock UNUSED, short which UNUSED, pkt_flow_t * flow) {
-    uint32_t      *bytes_ps;
+    uint32_t     * bytes_ps;
     struct timeval tv;
 
     LOG("Doing transform for %u:%d -> %u:%d (%u bytes)\n",
@@ -340,8 +343,8 @@ do_flow_transforms(int sock UNUSED, short which UNUSED, pkt_flow_t * flow) {
 pkt_flow_aggregate_t *
 do_aggregate(uint32_t src_addr, uint32_t dst_addr, uint32_t bytes,
              uint8_t proto) {
-    pkt_flow_aggregate_t *found,
-    *dst_found;
+    pkt_flow_aggregate_t * found,
+    * dst_found;
 
     if (aggregates == NULL) {
         return NULL;
@@ -367,7 +370,7 @@ do_aggregate(uint32_t src_addr, uint32_t dst_addr, uint32_t bytes,
     found->bytes_xferred += bytes;
     found->packets       += 1;
 
-    dst_found             = g_tree_lookup(found->talked_to, &dst_addr);
+    dst_found = g_tree_lookup(found->talked_to, &dst_addr);
 
     if (!dst_found) {
         /*
@@ -395,9 +398,9 @@ do_aggregate(uint32_t src_addr, uint32_t dst_addr, uint32_t bytes,
 pkt_flow_t     *
 find_flow(uint32_t src_addr, uint16_t src_port,
           uint32_t dst_addr, uint16_t dst_port,
-          direction_t *direction) {
+          direction_t * direction) {
     char           buff[10 + 5 + 10 + 5 + 1];
-    pkt_flow_t    *flow;
+    pkt_flow_t   * flow;
     struct timeval tv;
     uint16_t       src_port_copy,
                    dst_port_copy;
@@ -475,11 +478,11 @@ find_flow(uint32_t src_addr, uint16_t src_port,
 } /* find_flow */
 
 void
-print_hex(const char *data, int len) {
-    int   i, line_buf_off;
-    char *line_buf = NULL;
-    int   spaces_left;
-    char *spaces   = "                                          ";
+print_hex(const char * data, int len) {
+    int    i, line_buf_off;
+    char * line_buf = NULL;
+    int    spaces_left;
+    char * spaces   = "                                          ";
 
     line_buf     = calloc(len + 30, 1);
     line_buf_off = 0;
@@ -527,20 +530,20 @@ print_hex(const char *data, int len) {
 } /* print_hex */
 
 void
-packet_handler(const unsigned char *arg UNUSED, const struct pcap_pkthdr *hdr, const unsigned char *pkt) {
-    uint32_t       src_addr,
-                   dst_addr;
-    uint16_t       src_port,
-                   dst_port;
-    uint16_t       toff;
-    uint32_t       ip_proto;
-    struct ip     *ip4;
-    struct udphdr *udp;
-    struct tcphdr *tcp;
-    uint32_t       ip_hl;
-    pkt_flow_t    *flow;
-    char          *data;
-    char          *pkt_end;
+packet_handler(const unsigned char * arg UNUSED, const struct pcap_pkthdr * hdr, const unsigned char * pkt) {
+    uint32_t        src_addr,
+                    dst_addr;
+    uint16_t        src_port,
+                    dst_port;
+    uint16_t        toff;
+    uint32_t        ip_proto;
+    struct ip     * ip4;
+    struct udphdr * udp;
+    struct tcphdr * tcp;
+    uint32_t        ip_hl;
+    pkt_flow_t    * flow;
+    char          * data;
+    char          * pkt_end;
 
     if (hdr->caplen < sizeof(struct ip) + 14) {
         return;
@@ -603,7 +606,7 @@ packet_handler(const unsigned char *arg UNUSED, const struct pcap_pkthdr *hdr, c
     flow->total_bytes_xferred += hdr->len;
     flow->current_bytes       += hdr->len;
     flow->total_packets       += 1;
-    flow->proto                = ip_proto;
+    flow->proto = ip_proto;
 
     gssize slen = pkt_end - data;
     if (display_payload) {
@@ -625,9 +628,8 @@ packet_handler(const unsigned char *arg UNUSED, const struct pcap_pkthdr *hdr, c
     global_packets++;
 } /* packet_handler */
 
-
 void
-ev_packet_handler(int sock UNUSED, short which UNUSED, void *data) {
+ev_packet_handler(int sock UNUSED, short which UNUSED, void * data) {
     pcap_dispatch(pcap_desc, 1, (void *)packet_handler, data);
 }
 
@@ -727,8 +729,8 @@ print_flow(pkt_flow_t * flow) {
 
     printf("%-21s %-21s ", sbuf, dbuf);
     printf("p=%-2d ", flow->proto);
-    printf("tp=%-10llu ", flow->total_packets);
-    printf("tB=%-10llu ", flow->total_bytes_xferred);
+    printf("tp=%-10" PRIu64 " ", flow->total_packets);
+    printf("tB=%-10" PRIu64 " ", flow->total_bytes_xferred);
     printf("Bps=%-10u ", Bps);
     printf("Mbps=%u ", Mbps);
 
@@ -748,12 +750,12 @@ print_flow(pkt_flow_t * flow) {
 }
 
 int
-aggregate_cmp(void *ap, void *bp) {
-    uint64_t              var1,
-                          var2;
-    order_by_t            order;
-    pkt_flow_aggregate_t *a;
-    pkt_flow_aggregate_t *b;
+aggregate_cmp(void * ap, void * bp) {
+    uint64_t               var1,
+                           var2;
+    order_by_t             order;
+    pkt_flow_aggregate_t * a;
+    pkt_flow_aggregate_t * b;
 
     if (reverse_order) {
         a = *(pkt_flow_aggregate_t **)bp;
@@ -797,13 +799,13 @@ aggregate_cmp(void *ap, void *bp) {
 } /* aggregate_cmp */
 
 int
-flow_cmp(void *ap, void *bp) {
-    pkt_flow_t *a;              /* = *(pkt_flow_t **) ap; */
-    pkt_flow_t *b;              /* = *(pkt_flow_t **) bp; */
-    uint64_t    var1,
-                var2;
-    uint32_t    Mbps,
-                Bps;
+flow_cmp(void * ap, void * bp) {
+    pkt_flow_t * a;              /* = *(pkt_flow_t **) ap; */
+    pkt_flow_t * b;              /* = *(pkt_flow_t **) bp; */
+    uint64_t     var1,
+                 var2;
+    uint32_t     Mbps,
+                 Bps;
 
     if (reverse_order) {
         a = *(pkt_flow_t **)bp;
@@ -859,7 +861,7 @@ flow_cmp(void *ap, void *bp) {
 } /* flow_cmp */
 
 void
-deal_with_flow(char *key UNUSED, void *flow, GArray * array) {
+deal_with_flow(char * key UNUSED, void * flow, GArray * array) {
     g_array_append_val(array, flow);
 }
 
@@ -874,7 +876,7 @@ report_talker(GArray * array) {
     unsigned int i;
 
     for (i = 0; i < array->len; i++) {
-        pkt_flow_aggregate_t *node;
+        pkt_flow_aggregate_t * node;
 
         if (report_dest_limit && i >= report_dest_limit) {
             break;
@@ -882,7 +884,7 @@ report_talker(GArray * array) {
 
         node = g_array_index(array, pkt_flow_aggregate_t *, i);
 
-        printf("%4d. %-16s p=%-2d tp=%-12u tB=%-20llu\n", i + 1,
+        printf("%4d. %-16s p=%-2d tp=%-12u tB=%-20" PRIu64 "\n", i + 1,
                inet_ntoa(*(struct in_addr *)&node->address),
                node->protocol, node->packets, node->bytes_xferred);
 
@@ -897,8 +899,8 @@ report_aggregate(GArray * array) {
     unsigned int i;
 
     for (i = 0; i < array->len; i++) {
-        pkt_flow_aggregate_t *node;
-        GArray               *ordered_array;
+        pkt_flow_aggregate_t * node;
+        GArray               * ordered_array;
 
         if (report_top_limit && i >= report_top_limit) {
             break;
@@ -906,7 +908,7 @@ report_aggregate(GArray * array) {
 
         node = g_array_index(array, pkt_flow_aggregate_t *, i);
 
-        printf("%-27s tp=%-12u tB=%-20llu dh=%d\n",
+        printf("%-27s tp=%-12u tB=%-20" PRIu64 " dh=%d\n",
                inet_ntoa(*(struct in_addr *)&node->address),
                node->packets, node->bytes_xferred,
                g_tree_nnodes(node->talked_to));
@@ -933,7 +935,7 @@ report_aggregate(GArray * array) {
 
 void
 report_aggregates(void) {
-    GArray *ordered_array;
+    GArray * ordered_array;
 
     if (aggregates == NULL) {
         return;
@@ -955,9 +957,9 @@ report_aggregates(void) {
 }
 
 void
-report(int sock UNUSED, short which UNUSED, void *data UNUSED) {
+report(int sock UNUSED, short which UNUSED, void * data UNUSED) {
     struct timeval tv;
-    GArray        *ordered_array;
+    GArray       * ordered_array;
     unsigned int   i;
 
     if (!quiet) {
@@ -967,9 +969,13 @@ report(int sock UNUSED, short which UNUSED, void *data UNUSED) {
         calculate_ps(global_time, global_bytes_xferred,
                      &global_Mbps, &global_Bps);
 
-        printf("-- START %ld [ tB=%llu Bps=%u Mbps=%u pkts=%llu ]\n",
-               time(NULL) - runtime, global_bytes_xferred,
-               global_Bps, global_Mbps, global_packets);
+        printf("-- START %ld [ tB=%" PRIu64 " Bps=%u Mbps=%u pkts=%" PRIu64 " conns=%u ]\n",
+               time(NULL) - runtime,
+               global_bytes_xferred,
+               global_Bps,
+               global_Mbps,
+               global_packets,
+               g_hash_table_size(flow_tbl));
 
         global_bytes_xferred = 0;
         global_packets       = 0;
@@ -1031,10 +1037,10 @@ offline_reset_flows(gpointer key UNUSED, pkt_flow_t * flow, gpointer args UNUSED
 
 void
 do_offline_analysis(void) {
-    struct pcap_pkthdr   hdr;
-    const unsigned char *pkt;
-    uint32_t             reset_flow_test_start;
-    uint32_t             report_test_start;
+    struct pcap_pkthdr    hdr;
+    const unsigned char * pkt;
+    uint32_t              reset_flow_test_start;
+    uint32_t              report_test_start;
 
     reset_flow_test_start = time(NULL);
     report_test_start     = 0;
@@ -1073,7 +1079,7 @@ do_offline_analysis(void) {
 }
 
 int
-main(int argc, char **argv) {
+main(int argc, char ** argv) {
     struct timeval tv;
 
     globals_init();
@@ -1100,3 +1106,4 @@ main(int argc, char **argv) {
     event_loop(0);
     return 0;
 }
+
