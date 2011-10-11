@@ -5,7 +5,7 @@ Version:        1
 Release:        0
 Summary:        Trafan Network Monitoring System
 Group:          System Environment/Base
-License:        GPL
+License:        BSD
 URL:            http://github.com/ellzey/trafan
 BuildRoot:      %{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
 BuildRequires:  git libevent-devel scons glib2-devel
