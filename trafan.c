@@ -109,7 +109,7 @@ pcap_t     * pcap_desc;
 GHashTable * flow_tbl;
 GTree      * aggregates;
 
-void free_flow_tbl(pkt_flow_t * flow);
+void         free_flow_tbl(pkt_flow_t * flow);
 
 void
 globals_init(void) {
@@ -209,7 +209,7 @@ parse_args(int argc, char ** argv) {
                 display_payload = 1;
                 break;
             case 'p':
-                pcap_in_file = optarg;
+                pcap_in_file    = optarg;
                 break;
             case 'd':
                 detail++;
@@ -218,7 +218,7 @@ parse_args(int argc, char ** argv) {
                 iface = optarg;
                 break;
             case 'f':
-                bpf = optarg;
+                bpf   = optarg;
                 break;
             case 'r':
                 if (*optarg == '-') {
@@ -228,12 +228,12 @@ parse_args(int argc, char ** argv) {
                 }
                 break;
             case 'l':
-                top_limit = atoi(optarg);
+                top_limit        = atoi(optarg);
                 break;
             case 'L':
-                tok = strtok(optarg, ":");
+                tok              = strtok(optarg, ":");
                 report_top_limit = atoi(tok);
-                tok = strtok(NULL, ":");
+                tok              = strtok(NULL, ":");
                 if (tok) {
                     report_dest_limit = atoi(tok);
                 }
@@ -245,8 +245,8 @@ parse_args(int argc, char ** argv) {
                 aggregate_flows = 1;
                 break;
             case 'c':
-                stop_count = atoi(optarg);
-                count_stop = stop_count;
+                stop_count      = atoi(optarg);
+                count_stop      = stop_count;
                 break;
             case 'O':
                 switch (*optarg) {
@@ -281,7 +281,7 @@ parse_args(int argc, char ** argv) {
                 }
                 break;
             case 'R':
-                aggregates = g_tree_new((GCompareFunc)addr_cmp);
+                aggregates    = g_tree_new((GCompareFunc)addr_cmp);
                 break;
             case 'n':
                 reverse_order = 1;
@@ -531,25 +531,40 @@ print_hex(const char * data, int len) {
 
 void
 packet_handler(const unsigned char * arg UNUSED, const struct pcap_pkthdr * hdr, const unsigned char * pkt) {
-    uint32_t        src_addr,
-                    dst_addr;
-    uint16_t        src_port,
-                    dst_port;
-    uint16_t        toff;
-    uint32_t        ip_proto;
-    struct ip     * ip4;
-    struct udphdr * udp;
-    struct tcphdr * tcp;
-    uint32_t        ip_hl;
-    pkt_flow_t    * flow;
-    char          * data;
-    char          * pkt_end;
+    uint32_t              src_addr,
+                          dst_addr;
+    uint16_t              src_port,
+                          dst_port;
+    uint16_t              toff;
+    uint32_t              ip_proto;
+    struct ip           * ip4;
+    struct udphdr       * udp;
+    struct tcphdr       * tcp;
+    uint32_t              ip_hl;
+    pkt_flow_t          * flow;
+    char                * data;
+    char                * pkt_end;
+    struct ether_header * eth;
+    uint16_t              eth_type;
+    int                   ip_offset;
 
-    if (hdr->caplen < sizeof(struct ip) + 14) {
+    eth      = (struct ether_header *)pkt;
+    eth_type = ntohs(eth->ether_type);
+
+    switch (eth_type) {
+        case ETHERTYPE_IP:
+            ip_offset = 14;
+            break;
+        case ETHERTYPE_VLAN:
+            ip_offset = 18;
+            break;
+    }
+
+    if (hdr->caplen < sizeof(struct ip) + ip_offset) {
         return;
     }
 
-    ip4 = (struct ip *)(pkt + 14);
+    ip4 = (struct ip *)(pkt + ip_offset);
 
     if (ip4->ip_v != 4) {
         return;
