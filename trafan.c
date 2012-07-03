@@ -21,7 +21,7 @@
 #include <event.h>
 #include <glib.h>
 
-#define LOG(x, s ...) do {                       \
+#define LOG(x, s...) do {                        \
         if (!debug) {                            \
             break;                               \
         }                                        \
@@ -99,6 +99,7 @@ order_by_t   order_by;
 order_by_t   aggregate_order_by;
 char       * pcap_in_file;
 int          display_payload;
+int          only_report;
 
 /*
  * if the aggregate option is set, we don't use a flow, but we see a per
@@ -133,6 +134,7 @@ globals_init(void) {
     order_by             = ORDER_BY_TOTAL_BYTES;
     aggregate_order_by   = ORDER_BY_TOTAL_BYTES;
     snaplen              = 90;
+    only_report          = 0;
 
     flow_tbl             = g_hash_table_new_full(g_str_hash, g_str_equal,
                                                  NULL, (void *)free_flow_tbl);
@@ -192,7 +194,7 @@ parse_args(int argc, char ** argv) {
     int    c;
     char * tok;
 
-    while ((c = getopt(argc, argv, "s:nhRqL:l:di:f:r:Dac:O:o:p:X")) != -1) {
+    while ((c = getopt(argc, argv, "s:nhRqQL:l:di:f:r:Dac:O:o:p:X")) != -1) {
         switch (c) {
             case 'D':
                 debug++;
@@ -286,6 +288,9 @@ parse_args(int argc, char ** argv) {
             case 'n':
                 reverse_order = 1;
                 break;
+            case 'Q':
+                only_report   = 1;
+                break;
             case 'h':
             default:
                 printf("Usage: %s [opts]\n"
@@ -300,6 +305,7 @@ parse_args(int argc, char ** argv) {
                        "   -r  <runtime>\n"
                        "   -a: aggregate (disable flows)\n"
                        "   -R: display aggregate flow report at exit\n"
+                       "   -Q: Only display the report and nothing else\n"
                        "  -Op: Order by total packets\n"
                        "  -Ob: Order by Bps\n"
                        "  -Om: Order by Mbps\n"
@@ -977,6 +983,10 @@ report(int sock UNUSED, short which UNUSED, void * data UNUSED) {
     GArray       * ordered_array;
     unsigned int   i;
 
+    if (only_report == 1) {
+        return;
+    }
+
     if (!quiet) {
         uint32_t global_Bps,
                  global_Mbps;
@@ -1090,7 +1100,7 @@ do_offline_analysis(void) {
         }
     }
 
-    report(0, 0, NULL);
+    exit_prog(0);
 }
 
 int
