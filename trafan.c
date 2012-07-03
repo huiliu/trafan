@@ -905,7 +905,7 @@ report_talker(GArray * array) {
 
         node = g_array_index(array, pkt_flow_aggregate_t *, i);
 
-        printf("%4d. %-16s p=%-2d tp=%-12u tB=%-20" PRIu64 "\n", i + 1,
+        printf("%8u. %-16s p=%-2d tp=%-12u tB=%-20" PRIu64 "\n", i + 1,
                inet_ntoa(*(struct in_addr *)&node->address),
                node->protocol, node->packets, node->bytes_xferred);
 
@@ -929,7 +929,7 @@ report_aggregate(GArray * array) {
 
         node = g_array_index(array, pkt_flow_aggregate_t *, i);
 
-        printf("%-27s tp=%-12u tB=%-20" PRIu64 " dh=%d\n",
+        printf("%4u. %-27s tp=%-12u tB=%-20" PRIu64 " dh=%d\n", i + 1,
                inet_ntoa(*(struct in_addr *)&node->address),
                node->packets, node->bytes_xferred,
                g_tree_nnodes(node->talked_to));
