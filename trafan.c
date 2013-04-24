@@ -165,8 +165,8 @@ dnsbl_is_blocked(uint32_t addr) {
     found    = g_hash_table_lookup(dnsbl_cache, addr_str);
 
     if (found == NULL) {
+        struct addrinfo * res = NULL;
         struct addrinfo   hints;
-        struct addrinfo * res;
         int               status;
 
         found             = &BL_NOTBLOCKED;
