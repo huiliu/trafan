@@ -17,11 +17,12 @@
 #include <netinet/ip.h>
 #include <net/ethernet.h>
 
+#include <event2/event.h>
+#include <event2/event_struct.h>
 #include <pcap.h>
-#include <event.h>
 #include <glib.h>
 
-#define LOG(x, s...) do {                        \
+#define LOG(x, s ...) do {                       \
         if (!debug) {                            \
             break;                               \
         }                                        \
@@ -77,29 +78,31 @@ typedef enum {
     DIRECTION_SERVER
 } direction_t;
 
-struct event pcap_event;
-struct event stop_event;
-int          debug;
-int          detail;
-unsigned int runtime;
-unsigned int top_limit;
-unsigned int report_top_limit;
-unsigned int report_dest_limit;
-int          stop_count;
-int          count_stop;
-int          snaplen;
-char       * bpf;
-char       * iface;
-int          quiet;
-uint64_t     global_bytes_xferred;
-uint32_t     global_time;
-uint64_t     global_packets;
-int          reverse_order;
-order_by_t   order_by;
-order_by_t   aggregate_order_by;
-char       * pcap_in_file;
-int          display_payload;
-int          only_report;
+struct event_base * evbase;
+struct event      * pcap_event;
+struct event        stop_event;
+int                 debug;
+int                 detail;
+unsigned int        runtime;
+unsigned int        top_limit;
+unsigned int        report_top_limit;
+unsigned int        report_dest_limit;
+int                 stop_count;
+int                 count_stop;
+int                 snaplen;
+char              * bpf;
+char              * iface;
+int                 quiet;
+uint64_t            global_bytes_xferred;
+uint32_t            global_time;
+uint64_t            global_packets;
+int                 reverse_order;
+order_by_t          order_by;
+order_by_t          aggregate_order_by;
+char              * pcap_in_file;
+int                 display_payload;
+int                 only_report;
+int                 use_dnsbl;
 
 /*
  * if the aggregate option is set, we don't use a flow, but we see a per
@@ -108,9 +111,13 @@ int          only_report;
 uint32_t     aggregate_flows;
 pcap_t     * pcap_desc;
 GHashTable * flow_tbl;
+GHashTable * dnsbl_cache;
 GTree      * aggregates;
 
 void         free_flow_tbl(pkt_flow_t * flow);
+
+int          BL_BLOCKED    = 1;
+int          BL_NOTBLOCKED = 0;
 
 void
 globals_init(void) {
@@ -135,10 +142,58 @@ globals_init(void) {
     aggregate_order_by   = ORDER_BY_TOTAL_BYTES;
     snaplen              = 90;
     only_report          = 0;
+    use_dnsbl            = 0;
+    evbase               = event_base_new();
 
     flow_tbl             = g_hash_table_new_full(g_str_hash, g_str_equal,
                                                  NULL, (void *)free_flow_tbl);
+
+    dnsbl_cache          = g_hash_table_new_full(g_str_hash, g_str_equal, NULL, NULL);
 }
+
+int
+dnsbl_is_blocked(uint32_t addr) {
+    char   buf[1024];
+    char * addr_str;
+    int  * found;
+
+    addr     = htonl(addr);
+    addr_str = inet_ntoa(*(struct in_addr *)&addr);
+    snprintf(buf, sizeof(buf), "%s.dnsbl.sorbs.net", addr_str);
+
+    /* first check the cache */
+    found    = g_hash_table_lookup(dnsbl_cache, addr_str);
+
+    if (found == NULL) {
+        struct addrinfo   hints;
+        struct addrinfo * res;
+        int               status;
+
+        found             = &BL_NOTBLOCKED;
+
+        memset(&hints, 0, sizeof hints);
+        hints.ai_family   = AF_UNSPEC;
+        hints.ai_socktype = SOCK_STREAM;
+
+        if ((status = getaddrinfo(buf, NULL, &hints, &res)) != 0) {
+            found = &BL_NOTBLOCKED;
+        } else if (res->ai_addr != 0) {
+            found = &BL_BLOCKED;
+        }
+
+        g_hash_table_insert(dnsbl_cache, addr_str, found);
+
+        if (res) {
+            freeaddrinfo(res);
+        }
+    }
+
+    if (found == &BL_BLOCKED) {
+        return 1;
+    }
+
+    return 0;
+} /* dnsbl_is_blocked */
 
 void
 free_flow_key(gpointer key) {
@@ -194,8 +249,11 @@ parse_args(int argc, char ** argv) {
     int    c;
     char * tok;
 
-    while ((c = getopt(argc, argv, "s:nhRqQL:l:di:f:r:Dac:O:o:p:X")) != -1) {
+    while ((c = getopt(argc, argv, "s:nhRqQL:l:di:f:r:Dac:O:o:p:XN")) != -1) {
         switch (c) {
+            case 'N':
+                use_dnsbl = 1;
+                break;
             case 'D':
                 debug++;
                 break;
@@ -321,7 +379,8 @@ parse_args(int argc, char ** argv) {
 }         /* parse_args */
 
 void
-do_flow_transforms(int sock UNUSED, short which UNUSED, pkt_flow_t * flow) {
+do_flow_transforms(int sock UNUSED, short which UNUSED, void * arg) {
+    pkt_flow_t   * flow = arg;
     uint32_t     * bytes_ps;
     struct timeval tv;
 
@@ -341,7 +400,7 @@ do_flow_transforms(int sock UNUSED, short which UNUSED, pkt_flow_t * flow) {
     tv.tv_usec          = 0;
 
     if (pcap_in_file == NULL) {
-        evtimer_set(&flow->timer, (void *)do_flow_transforms, flow);
+        evtimer_assign(&flow->timer, evbase, do_flow_transforms, flow);
         evtimer_add(&flow->timer, &tv);
     }
 }
@@ -474,7 +533,7 @@ find_flow(uint32_t src_addr, uint16_t src_port,
         tv.tv_sec  = 1;
         tv.tv_usec = 0;
 
-        evtimer_set(&flow->timer, (void *)do_flow_transforms, flow);
+        evtimer_assign(&flow->timer, evbase, do_flow_transforms, flow);
         evtimer_add(&flow->timer, &tv);
     }
 
@@ -691,9 +750,8 @@ pcap_init(void) {
 
 
     if (pcap_in_file == NULL) {
-        event_set(&pcap_event, pcap_fd, EV_READ | EV_PERSIST,
-                  (void *)ev_packet_handler, NULL);
-        event_add(&pcap_event, 0);
+        pcap_event = event_new(evbase, pcap_fd, EV_READ | EV_PERSIST, ev_packet_handler, NULL);
+        event_add(pcap_event, NULL);
     }
     return;
 
@@ -755,6 +813,15 @@ print_flow(pkt_flow_t * flow) {
     printf("Bps=%-10u ", Bps);
     printf("Mbps=%u ", Mbps);
 
+    if (use_dnsbl == 1) {
+        int src_blocked = dnsbl_is_blocked(flow->src_addr);
+        int dst_blocked = dnsbl_is_blocked(flow->dst_addr);
+
+        printf("sb=%s db=%s ",
+               (src_blocked == 1) ? "y" : "n",
+               (dst_blocked == 1) ? "y" : "n");
+    }
+
 
     if (detail) {
         printf("\n");
@@ -768,7 +835,7 @@ print_flow(pkt_flow_t * flow) {
         print_hex(flow->client_payload->str, flow->client_payload->len);
         print_hex(flow->server_payload->str, flow->server_payload->len);
     }
-}
+} /* print_flow */
 
 int
 aggregate_cmp(void * ap, void * bp) {
@@ -1029,7 +1096,7 @@ report(int sock UNUSED, short which UNUSED, void * data UNUSED) {
         tv.tv_usec = 0;
         tv.tv_sec  = runtime;
 
-        evtimer_set(&stop_event, (void *)report, NULL);
+        evtimer_assign(&stop_event, evbase, report, NULL);
         evtimer_add(&stop_event, &tv);
     }
 
@@ -1111,7 +1178,6 @@ main(int argc, char ** argv) {
 
     parse_args(argc, argv);
 
-    event_init();
     pcap_init();
 
     signal(SIGINT, exit_prog);
@@ -1125,10 +1191,10 @@ main(int argc, char ** argv) {
     tv.tv_sec  = runtime;
     tv.tv_usec = 0;
 
-    evtimer_set(&stop_event, (void *)report, NULL);
+    evtimer_assign(&stop_event, evbase, report, NULL);
     evtimer_add(&stop_event, &tv);
 
-    event_loop(0);
+    event_base_loop(evbase, 0);
     return 0;
 }
 
