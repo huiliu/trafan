@@ -159,7 +159,7 @@ dnsbl_is_blocked(uint32_t addr) {
 
     addr     = htonl(addr);
     addr_str = inet_ntoa(*(struct in_addr *)&addr);
-    snprintf(buf, sizeof(buf), "%s.dnsbl.sorbs.net", addr_str);
+    snprintf(buf, sizeof(buf), "%s.problems.dnsbl.sorbs.net", addr_str);
 
     /* first check the cache */
     found    = g_hash_table_lookup(dnsbl_cache, addr_str);
@@ -835,6 +835,8 @@ print_flow(pkt_flow_t * flow) {
         print_hex(flow->client_payload->str, flow->client_payload->len);
         print_hex(flow->server_payload->str, flow->server_payload->len);
     }
+
+    fflush(stdout);
 } /* print_flow */
 
 int
